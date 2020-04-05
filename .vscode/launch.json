@@ -1,0 +1,38 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Current File",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Forward",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/forward.py",
+            "args": [
+                //"--broker", "137.157.211.49:9092",
+                "--sics", "ics1-pelican-test.nbi.ansto.gov.au:5566",
+                "--topic", "sics_stream"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Simulate",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/test_publish.py",
+            "args": [
+                "--topic", "sics_stream",
+                "--sleep", "2"
+            ],
+            "console": "integratedTerminal"
+        }
+    ]
+}
