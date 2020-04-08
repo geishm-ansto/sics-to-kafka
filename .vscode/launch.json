@@ -24,14 +24,11 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "Simulate",
+            "name": "TestPublish",
             "type": "python",
             "request": "launch",
             "program": "${workspaceFolder}/test_publish.py",
-            "args": [
-                "--topic", "sics_stream",
-                "--sleep", "2"
-            ],
+            "args": [ ],
             "console": "integratedTerminal"
         }
     ]
