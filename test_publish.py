@@ -99,11 +99,12 @@ class TestForwarding(unittest.TestCase):
         # launch the sics client to process the messages
         # - it exists for the duration of the tests
         cls.broker = 'localhost:9092'
-        cls.sics = 'localhost:5566'
+        cls.sics = 'localhost'
+        cls.port = 5566
         cls.topic = 'test_sics_stream'
         cls.port = 5566
         sics = threading.Thread(target=sics_client, args=(
-            cls.sics, cls.broker, cls.topic), daemon=True)
+            cls.sics, cls.port, cls.broker, cls.topic, None), daemon=True)
         sics.start()
 
     def test_forwarding(self):

@@ -18,17 +18,9 @@
             "program": "${workspaceFolder}/forward.py",
             "args": [
                 //"--broker", "137.157.211.49:9092",
-                "--sics", "ics1-pelican-test.nbi.ansto.gov.au:5566",
+                //"--sics", "ics1-pelican-test.nbi.ansto.gov.au:5566",
                 "--topic", "sics_stream"
             ],
-            "console": "integratedTerminal"
-        },
-        {
-            "name": "TestPublish",
-            "type": "python",
-            "request": "launch",
-            "program": "${workspaceFolder}/test_publish.py",
-            "args": [ ],
             "console": "integratedTerminal"
         }
     ]

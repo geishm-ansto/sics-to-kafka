@@ -20,100 +20,18 @@ import argparse
 import json
 import zmq
 import warnings
-import flatbuffers
-from kafka import KafkaProducer
 
-import pyschema.LogData as LogData
-from pyschema.Value import Value
-from pyschema.Int import IntStart, IntAddValue, IntEnd
-from pyschema.Double import DoubleStart, DoubleAddValue, DoubleEnd
-from pyschema.String import StringStart, StringAddValue, StringEnd
+from kafkahelp import KafkaLogger
+from sicsstate import StateProcessor
 
 
-def timestamp_to_nsecs(ts):
-    return int(ts * 1e9)
+def sics_client(sics, port, broker, topic, state_processor):
 
-
-def timestamp_to_msecs(ts):
-    return int(ts * 1e3)
-
-
-def add_int_value(builder, value):
-    IntStart(builder)
-    IntAddValue(builder, value)
-    position = IntEnd(builder)
-    return position, Value.Int
-
-
-def add_float_value(builder, value):
-    DoubleStart(builder)
-    DoubleAddValue(builder, value)
-    position = DoubleEnd(builder)
-    return position, Value.Double
-
-
-def add_string_value(builder, value):
-    svalue = builder.CreateString(value)
-    StringStart(builder)
-    StringAddValue(builder, svalue)
-    position = StringEnd(builder)
-    return position, Value.String
-
-
-MapValue = {
-    int: add_int_value,
-    float: add_float_value,
-    str: add_string_value,
-}
-
-
-def create_f142_message(timestamp, tag, value):
-
-    file_identifier = b"f142"
-    builder = flatbuffers.Builder(1024)
-    source = builder.CreateString(tag)
-    try:
-        (posn, val_type) = MapValue[type(value)](builder, value)
-    except (KeyError):
-        print('No suitable builder for type {}'.format(type(value)))
-        return None
-
-    # Build the actual buffer
-    LogData.LogDataStart(builder)
-    LogData.LogDataAddSourceName(builder, source)
-    LogData.LogDataAddValue(builder, posn)
-    LogData.LogDataAddValueType(builder, val_type)
-    LogData.LogDataAddTimestamp(builder, timestamp_to_nsecs(timestamp))
-    log_msg = LogData.LogDataEnd(builder)
-    builder.Finish(log_msg)
-
-    # Generate the output and replace the file_identifier
-    buff = builder.Output()
-    buff[4:8] = file_identifier
-    return bytes(buff)
-
-
-def publish_f142_message(producer, topic, timestamp, tag, value):
-    """
-    Publish an f142 message to a given topic.
-    """
-    msg = create_f142_message(timestamp, tag, value)
-    if msg:
-        producer.send(topic, msg, timestamp_ms=timestamp_to_msecs(timestamp))
-        # Flush producer queue after each message, we don't want the messages to be batched
-        producer.flush()
-
-
-def sics_client(sics, broker, topic):
-
-    try:
-        producer = KafkaProducer(bootstrap_servers=[broker])
-    except AttributeError:
-        raise ValueError('Missing broker argument')
+    kafka = KafkaLogger(broker)
 
     context = zmq.Context()
     socket = context.socket(zmq.SUB)
-    socket.connect('tcp://' + sics)
+    socket.connect('tcp://{}:{}'.format(sics, port))
 
     # filter messages by topic
     socket.setsockopt(zmq.SUBSCRIBE, b"")
@@ -122,12 +40,12 @@ def sics_client(sics, broker, topic):
     while True:
         message = socket.recv().decode('utf-8')
         response = json.loads(message)
-        #print("Message: {}".format(message))
-        #print("JSON: {}".format(response))
+        print("{:.4f}: {}: {}: {}".format(response["ts"], response["type"], response["name"], response['value']))
         if response["type"] == "Value":
-            publish_f142_message(
-                producer, topic, response['ts'], response['name'], response['value'])
-            print("Value: {}: {}".format(response["name"], response['value']))
+            kafka.publish_f142_message(
+                topic, response['ts'], response['name'], response['value'])
+        elif state_processor and response["type"] in ["State", "Status"]:
+            state_processor.add_event(response)
         else:
             warnings.warn("Unsupported: {}".format(str(response)))
 
@@ -138,9 +56,14 @@ if __name__ == '__main__':
     parser.add_argument(
         '--broker', help='The Kafka Broker to connect to IP:P', default='localhost:9092')
     parser.add_argument(
-        '--sics', help='SICS publish to connect ZMQ to IP:P', default='localhost:5566')
+        '--sics', help='SICS url for zmq publisher', default='localhost')
+    parser.add_argument(
+        '--port', help='SICS port for zmq publisher', default=5566)
+    parser.add_argument(
+        '--xport', help='SICS gumtree xml request server port', default=5555)
     parser.add_argument(
         '--topic', help='Publish to Kafka topic', default='sics_stream')
     args = parser.parse_args()
 
-    sics_client(args.sics, args.broker, args.topic)
+    state_processor = StateProcessor(args.sics, args.xport)
+    sics_client(args.sics, args.port, args.broker, args.topic, state_processor)

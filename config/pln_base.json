@@ -1,0 +1,79 @@
+{
+    "cmd": "FileWriter_new",
+    "broker": "localhost:9092",
+    "job_id": "JOBID",
+    "use_hdf_swmr": false,
+    "start_time": "STARTTIME",
+    "stop_time": "STOPTIME",
+    "file_attributes": {
+        "file_name": "OFILE"
+    },
+    "nexus_structure": {
+        "children": [
+            {
+                "type": "group",
+                "name": "entry1",
+                "children": [
+                    {
+                        "type": "group",
+                        "name": "instrument",
+                        "children": [
+                        {
+                            "type": "group",
+                            "name": "detector_events",
+                            "children": [
+                                {
+                                    "type": "stream",
+                                    "stream": {
+                                        "topic": "neutron_events",
+                                        "source": "Ansto",
+                                        "writer_module": "ev42"
+                                    }
+                                }
+                            ],
+                            "attributes": [
+                                {
+                                    "name": "NX_class",
+                                    "values": "NXgroup"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "group",
+                            "name": "chopper_events",
+                            "children": [
+                                {
+                                    "type": "stream",
+                                    "stream": {
+                                        "topic": "primary_chopper",
+                                        "source": "Ansto",
+                                        "writer_module": "tdct"
+                                    }
+                                }
+                            ],
+                            "attributes": [
+                                {
+                                    "name": "NX_class",
+                                    "values": "NXgroup"
+                                }
+                            ]
+                        }
+                        ],
+                        "attributes": [
+                            {
+                                "name": "NX_class",
+                                "values": "NXinstrument"
+                            }
+                        ]
+                    }
+                ],
+                "attributes": [
+                    {
+                        "name": "NX_class",
+                        "values": "NXentry"
+                    }
+                ]
+            }
+        ]
+    }
+}
