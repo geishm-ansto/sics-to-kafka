@@ -8,6 +8,7 @@ MANIFEST
 /nicos.conf
 nicos/RELEASE-VERSION
 
+pyschema/__pycache__
 log/*/current
 
 /data/

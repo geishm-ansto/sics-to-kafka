@@ -75,7 +75,7 @@ def extract_structure(filename, topic):
         stream['topic'] = topic
         try:
             if elem.shape[0] == 1:
-                stream['range'] = 'first'
+                stream['writer_module'] = 'sval'
         except AttributeError:
             pass
         msg['stream'] = stream

@@ -12,11 +12,12 @@ import subprocess
 #===================================================================
 # Configuration section
 #===================================================================
-schemapath = '../streaming-data-types'
+schemapath = '../streaming-data-types/schemas/'
 
 #============= Do Something ............... ========================
 
-schemas = glob.glob(schemapath + '/schemas/f142*.fbs')
+schemas = glob.glob(schemapath + 'f142*.fbs')
+schemas += glob.glob(schemapath + 'json_json.fbs')
 
 combase = ['../flatbuffers/flatc', '--python','-I','%s/schemas' %(schemapath),'-o','pyschema']
 for schema in schemas:

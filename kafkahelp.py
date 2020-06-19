@@ -1,6 +1,7 @@
 import flatbuffers
 from kafka import KafkaProducer
 
+import pyschema.JsonData as JsonData
 import pyschema.LogData as LogData
 from pyschema.Value import Value
 from pyschema.Int import IntStart, IntAddValue, IntEnd
@@ -78,11 +79,37 @@ class KafkaLogger(object):
         buff = builder.Output()
         buff[4:8] = file_identifier
         return bytes(buff)
+
     def publish_f142_message(self, topic, timestamp, tag, value):
         """
         Publish an f142 message to a given topic.
         """
         msg = self.create_f142_message(timestamp, tag, value)
+        if msg:
+            # send and flush so that messages are not batched
+            self.producer.send(
+                topic, msg, timestamp_ms=timestamp_to_msecs(timestamp))
+            self.producer.flush()
+
+    def create_json_message(self, timestamp, jstr):
+        file_identifier = b"json"
+        builder = flatbuffers.Builder(1024)
+        body = builder.CreateString(jstr)    
+        JsonData.JsonDataStart(builder)
+        JsonData.JsonDataAddJson(builder, body)
+        msg = JsonData.JsonDataEnd(builder)
+        builder.Finish(msg)  
+
+        # Generate the output and replace the file_identifier
+        buff = builder.Output()
+        buff[4:8] = file_identifier
+        return bytes(buff)
+
+    def publish_json_message(self, topic, timestamp, jstr):
+        """
+        Publish a json message to a given topic.
+        """
+        msg = self.create_json_message(timestamp, jstr)
         if msg:
             # send and flush so that messages are not batched
             self.producer.send(

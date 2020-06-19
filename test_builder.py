@@ -25,7 +25,7 @@ class TestBuilder(unittest.TestCase):
   - add elements
   '''
 
-  def _test_loadedfile(self):
+  def test_loadedfile(self):
     builder = CommandBuilder(base_file)
     cmd = builder.get_command()
     self.assertEqual(cmd["job_id"], "JOBID")
@@ -35,16 +35,16 @@ class TestBuilder(unittest.TestCase):
     self.assertTrue(node != None)
     self.assertEqual(node["name"], "entry1")
   
-  def _test_build(self):
+  def test_build(self):
     # values
     ofile = './data/temp.json'    
     start = int(unix_time_milliseconds(datetime.utcnow()))
-    duration = 600
+    stop = start + 1000 * 600
     root = "root"
     broker="somewhere:9092"
 
     builder = CommandBuilder()
-    builder.base_command(ofile, start, duration, root=root, broker=broker)
+    builder.base_command(ofile, start, stop, root=root, broker=broker)
 
     job_id = builder.get_job_id()
 
@@ -54,7 +54,7 @@ class TestBuilder(unittest.TestCase):
     cmd = builder.get_command()
     self.assertEqual(cmd["job_id"], job_id)
     self.assertEqual(cmd["start_time"], str(start))
-    self.assertEqual(cmd["stop_time"], str(start + 1000*duration))
+    self.assertEqual(cmd["stop_time"], str(stop))
     node = builder.get_root()
     self.assertTrue(node != None)
     self.assertEqual(node["name"], root)    
@@ -70,10 +70,11 @@ class TestBuilder(unittest.TestCase):
 
     # name, topic, source, writer, dtype, attributes
     streams = [
-      ('sample/some_temp', 'sics_stream', 'sample/some_temp', 'f142', 'float', [('units','Deg')])
+      ('sample/some_temp', 'sics_stream', 'sample/some_temp', 'f142', 'float', [('units','Deg')]),
+      ('sample/fixed_temp', 'sics_stream', 'sample/fixed_temp', 'sval', 'float', [('units','Deg C')])
     ]
 
-    builder = CommandBuilder(base_file)
+    builder = CommandBuilder(base_file, name_stream=True)
     for dt in datasets:
       builder.add_dataset(*dt)
     for st in streams:

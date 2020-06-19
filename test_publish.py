@@ -12,6 +12,8 @@ import unittest
 import threading
 
 from forward import sics_client
+from sicsstate import StateProcessor
+from sicsunits import UnitManager
 from kafka import KafkaConsumer
 
 from pyschema.Int import Int
@@ -101,10 +103,14 @@ class TestForwarding(unittest.TestCase):
         cls.broker = 'localhost:9092'
         cls.sics = 'localhost'
         cls.port = 5566
-        cls.topic = 'test_sics_stream'
-        cls.port = 5566
+        cls.topic = 'sics-stream'
+        cls.xport = 5555
+        cls.base_file = './config/pln_base.json'
+        cls.unit_manager = UnitManager(cls.broker, value_topic=cls.topic)
+        cls.state_processor = StateProcessor(
+        cls.sics, cls.xport, cls.base_file, cls.unit_manager, kafka_broker=cls.broker, stream_topic=cls.topic)
         sics = threading.Thread(target=sics_client, args=(
-            cls.sics, cls.port, cls.broker, cls.topic, None), daemon=True)
+            cls.sics, cls.port, cls.state_processor, cls.unit_manager), daemon=True)
         sics.start()
 
     def test_forwarding(self):
@@ -112,8 +118,11 @@ class TestForwarding(unittest.TestCase):
         publisher = Publisher(self.port)
 
         # launch the consumer that only listens for lastest messages
+        # flush the messages by reading until tmeout
         consumer = KafkaConsumer(self.topic, bootstrap_servers=self.broker, group_id='unit_test',
-                                 auto_offset_reset='latest', enable_auto_commit=True, consumer_timeout_ms=2000)
+                                 auto_offset_reset='latest', enable_auto_commit=True, consumer_timeout_ms=5000)
+        for msg in consumer:
+            pass
 
         # send all the messages via a different thread
         def send_messages(msgs):

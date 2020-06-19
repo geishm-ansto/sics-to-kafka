@@ -1,144 +1,133 @@
 
-"""
-Provides a class that maitains a list of units for the SICS parameters.
-"""
-import threading
-import zmq
 import time
 import json
-
-from queue import Queue
-import xml.etree.ElementTree as et
+import threading
+from collections import namedtuple
+from kafkahelp import KafkaLogger
+Parameter = namedtuple('Parameter', ['value', 'unit'])
 
 
 class UnitManager(object):
+    '''
+    Maintains a list of units and current values for the SICS parameters.
+    It receives 'values' and 'units' asynchronously and manages the logging 
+    of these values to kafka topics 'sics-stream' and 'sics-units'. 
+    The inputs execute in the caller context while the regular dump runs
+    in a separate thread.   
+    '''
 
-    def __init__(self, sics, port, recv_wait=1000, ident='kafka'):
+    def __init__(self, broker, log_period_secs=60,
+                 unit_topic='sics-units', value_topic='sics-stream'):
 
-        self.units = {}
-        self.rebuild = Queue()
-        self.lock = threading.Lock()
-        self.recv_wait = recv_wait
-        self.end_point = 'tcp://{}:{}'.format(sics, port)
-        self.socket = None
-        self.transactions = 0
-        self.ident = ident
+        self.unit_values = {}
+        self.log_period = log_period_secs
+        self.log_data = True
+        self.unit_topic = unit_topic
+        self.value_topic = value_topic
+        self.kafka = KafkaLogger(broker)
+        self.time_offset = 0
 
         # create the thread that will rebuild the units
-        self.thread = threading.Thread(target=self.run_update, daemon=True)
+        self.lock = threading.Lock()
+        self.thread = threading.Thread(target=self.logging_task, daemon=True)
         self.thread.start()
 
-    def open_connection(self, recover=False):
+    def __del__(self):
+        del self.kafka
+        
+    def new_value_event(self, response):
+        '''
+        Changed value event from SICS.
+        . Update local copy
+        . Send to 'sics-stream'
+        Executes in the caller context. 
+        '''
+        tag = response['name']
+        value = response['value']
+        event_ts = response['ts']
+        with self.lock:
+            try:
+                unit = self.unit_values[tag].unit
+                self.unit_values[tag] = Parameter(value, unit)
+            except KeyError:
+                self.unit_values[tag] = Parameter(value, "")
 
-        if recover and self.socket:
-            self.socket.setsockopt(zmq.LINGER, 0)
-            self.socket.close()
-            time.sleep(1)
+        self.kafka.publish_f142_message(
+            self.value_topic, event_ts, tag, value)
 
-        # open the ZeroMQ message
-        context = zmq.Context()
-        self.socket = context.socket(zmq.DEALER)
-        self.socket.setsockopt(zmq.IDENTITY, self.ident.encode('utf-8'))
-        self.socket.setsockopt(zmq.RCVTIMEO, self.recv_wait)
-        self.socket.connect(self.end_point.encode('utf-8'))
-        print('zmq.DEALER {} connection to {}'.format(
-            self.ident, self.end_point))
+    def set_unit_values(self, timestamp, unit_values):
+        '''
+        Set the units and current value for the tag, if a unit has
+        changed dump the unit value table to kafka.
+        Executes in the caller context.
+        '''
+        unit_changed = False
+        for tag, pm in unit_values.items():
+            with self.lock:
+                try:
+                    unit = self.unit_values[tag].unit
+                except KeyError:
+                    unit = ""
+                if pm.unit != unit:
+                    unit_changed = True
+                self.unit_values[tag] = Parameter(pm.value, pm.unit)
 
-    def extract_units(self, xmls):
-        root = et.fromstring(xmls)
-        #print('\n' + xmls)
+        if unit_changed:
+            self.snapshot(timestamp)
 
-        try:
-            unode = root.find('./component/property[@id="units"]/value')
-            return unode.text
-        except (AttributeError, TypeError):
-            # print(xmls)
-            return ''
+    def snapshot(self, timestamp):
+        '''
+        Convert the data to a json string and send to kafka. The timestamp
+        is based on the time module which may differ from the time stamp
+        from the SICS stream. The time offset in mil-sec records the difference
+        between the system clock and the timestamp 
+        '''
+        with self.lock:
+            jvalues = json.dumps(self.unit_values)
 
-    def cmd_request(self, cmd, text):
+        self.kafka.publish_json_message(self.unit_topic, timestamp, jvalues)
 
-        self.transactions += 1
-        request = {
-            'trans': self.transactions,
-            'cmd': cmd,
-            'text': text
-        }
-        msg = json.dumps(request).encode('utf-8')
-        try:
-            self.socket.send(msg)
-            while True:
-                message = self.socket.recv().decode('utf-8')
-                if message.startswith("{"):
-                    response = json.loads(message)
-                else:
-                    response = {'reply': "Nothing"}
-                if 'final' in response and response['final']:
-                    return response
-        except Exception as exc:
-            # There is a significant risk of a dead lock with the ZMQ client server model
-            # so after printing the message re-establish the connection
-            print('ZeroMQ: {}'.format(str(exc)))
-            print('Re-establishing connection because of the failure...')
-            self.open_connection(recover=True)
-        return {}
-
-    def recover_unit(self, tag):
-
-        # get the response and parse the xml data
-        response = self.cmd_request('SICS', 'getgumtreexml ' + tag)
-        try:
-            if response['flag'].lower() != 'ok':
-                return ''
-            return self.extract_units(response['reply'])
-        except Exception as exc:
-            # print(exc)
-            return ''
-
-    def run_update(self):
-        # run forever after connection processing the message queue requests
-        self.open_connection()
+    def logging_task(self):
+        '''
+        Get the current time and if the time period has elapsed:
+        . dump all of the values and units to 'sics-units'
+        . reset dump time 
+        '''
         while True:
-            # get the message from the queue
-            tag = self.rebuild.get()
-            if tag is None:
-                continue
-            unit = self.recover_unit(tag)
-            with self.lock:
-                self.units[tag] = unit
-            self.rebuild.task_done()
+            time.sleep(self.log_period)
+            if self.log_data:
+                snap_time = time.time() + self.time_offset
+                self.snapshot(snap_time)
 
-    def wait_for_update(self):
-        # blocks until the queue is empty
-        self.rebuild.join()
-
-    def rebuild_units(self):
-        # force a rebuild of all the units in the dictionary
-        with self.lock:
-            keys = self.units.keys()
-            self.units = {}
-        for p in keys:
-            self.rebuild.put(p)
-
-    def clear_units(self):
-        # wait for the queue to empty and clear the dictionary
-        self.rebuild.join()
-        with self.lock:
-            self.units = {}
-
-    def add_unit(self, tag):
-
-        with self.lock:
-            skip = tag in self.units
-            if not skip:
-                # add an empty value to avoid multiple requests
-                self.units[tag] = ''
-        if not skip:
-            self.rebuild.put(tag)
-
-    def get_unit(self, tag):
+    def get_parameter(self, tag):
+        '''
+        Returns the (value, unit) for the parameter name.
+        '''
         try:
             with self.lock:
-                unit = self.units[tag]
-            return unit
+                pm = self.unit_values[tag]
         except KeyError:
-            return ''
+            pm = None
+        return pm
+
+    def set_log_data(self, value):
+        '''
+        Enable/disable periodic logging of units
+        '''
+        self.log_data = value
+
+    def synch_time(self, sics_ts_secs):
+        '''
+        Account for the difference in time between the source
+        and local time. Needed to align the periodic units logs
+        to use comparable times.
+        '''
+        clock_ts = time.time()
+        self.time_offset = sics_ts_secs - clock_ts
+
+    def reset_test(self):
+        '''
+        Clears the unit_values
+        '''
+        with self.lock:
+            self.unit_values = {}

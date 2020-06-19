@@ -2,12 +2,11 @@
 
 import os
 import xmltodict
-#import xml.etree.ElementTree as et
 
 from collections import namedtuple, OrderedDict
 
 Component = namedtuple(
-    'Component', ['tag', 'value', 'dtype', 'klass', 'mutable', 'nxalias'])
+    'Component', ['tag', 'value', 'dtype', 'klass', 'mutable', 'nxalias', 'units', 'nxsave'])
 
 
 def get_properties(node):
@@ -24,10 +23,16 @@ def get_properties(node):
 
 def get_component(node, folder):
 
+    def get_value(pps, tag, def_value):
+        if tag in pps:
+            return pps[tag]
+        else:
+            return def_value
+
     props = get_properties(node)
     if props:
         try:
-            if 'nxsave' in props and props['nxsave'] == 'true':
+            if 'data' in props and props['data'] == 'true':
                 tag = folder + '/' + node['@id'] if folder else node['@id']
                 dtype = node['@dataType']
                 if dtype == 'int':
@@ -37,9 +42,11 @@ def get_component(node, folder):
                 else:
                     value = str(node['value'])
                 klass = props['klass']
-                mutable = True if props['mutable'] == 'true' else False
-                nxalias = '/'.join(props['nxalias'].split('_'))
-                cmp = Component(tag, value, dtype, klass, mutable, nxalias)
+                mutable = get_value(props, 'mutable', '') == 'true'
+                units = get_value(props, 'units', '')
+                nxsave = get_value(props, 'nxsave', '') == 'true'
+                nxalias = '/'.join(get_value(props, 'nxalias', '').split('_'))
+                cmp = Component(tag, value, dtype, klass, mutable, nxalias, units, nxsave)
                 return cmp
         except KeyError:
             raise ValueError('Property error for {}'.format(folder))
@@ -47,7 +54,7 @@ def get_component(node, folder):
         return None
 
 
-def parsesics(clist, tag, nodes, folder):
+def parse(clist, tag, nodes, folder):
 
     # receives the component list, current component node and node hierarchy
     # only interested in components
@@ -71,21 +78,20 @@ def parsesics(clist, tag, nodes, folder):
                 # append the folder names
                 nfold = folder + '/' + node['@id'] if folder else node['@id']
                 for k, v in node.items():
-                    parsesics(clist, k, v, nfold)
+                    parse(clist, k, v, nfold)
             else:
                 raise ValueError('Unexpected data type: {}'.format(dtype))
     elif isinstance(nodes, OrderedDict):
         nfold = folder + '/' + nodes['@id'] if folder else nodes['@id']
         for k, v in nodes.items():
-            parsesics(clist, k, v, nfold)
+            parse(clist, k, v, nfold)
     else:
         raise ValueError('Unexpected component type: {}'.format(type(nodes)))
 
 
-def parse(filename):
+def parsesics(xmlstr):
 
-    with open(filename, 'r') as fd:
-        doc = xmltodict.parse(fd.read())
+    doc = xmltodict.parse(xmlstr)
 
     # the root level is hipdaba:SICS
     root = doc['hipadaba:SICS']
@@ -93,19 +99,7 @@ def parse(filename):
     folder = ''
 
     for k, v in root.items():
-        parsesics(clist, k, v, folder)
+        parse(clist, k, v, folder)
 
-    # what to do with clist
     return clist
 
-
-class ParseSICSXML(object):
-
-    def __init__(self):
-        # any state info
-        pass
-
-    def parse(self, xmls):
-        # returns a list of Component's
-
-        pass

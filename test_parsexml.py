@@ -11,7 +11,7 @@ import time
 import json
 import unittest
 
-from parsexml import parse
+from parsexml import parsesics
 
 testfile = './data/gumtreexml.xml'
 
@@ -27,11 +27,14 @@ class TestXMLParser(unittest.TestCase):
             'control/T1S4',
             'control/T1SP1',
             'control/T1SP2',
-            'experiment/gumtree_status',
-            'experiment/gumtree_time_estimate'
+            #'experiment/gumtree_status',
+            #'experiment/gumtree_time_estimate'
         ]
-        clist = parse(testfile)
-        for cl, tag in zip(clist, expected):
+        with open(testfile, 'r') as fd:
+            clist = parsesics(fd.read())
+
+        tosave = [cl for cl in clist if cl.nxsave]
+        for cl, tag in zip(tosave, expected):
             print('{} -> {}'.format(cl.tag, cl.nxalias))
             self.assertEqual(cl.tag, tag)
 
