@@ -55,7 +55,7 @@ class TestStateProcessor(unittest.TestCase):
         TestStateProcessor.stp = StateProcessor(
             'localhost', 5555, base_file, unit_manager=unm)
 
-    def _test_recoverxml(self):
+    def test_recoverxml(self):
         '''
         Recover the xml data by directly issuing the request to the SICS server
         and confirm that it is non-empty and that 'file_name' is included.

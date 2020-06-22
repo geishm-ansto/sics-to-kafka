@@ -17,11 +17,25 @@
             "request": "launch",
             "program": "${workspaceFolder}/forward.py",
             "args": [
-                //"--broker", "137.157.211.49:9092",
-                //"--sics", "ics1-pelican-test.nbi.ansto.gov.au:5566",
-                "--topic", "sics_stream"
+                "--topic",
+                "sics_stream"
             ],
             "console": "integratedTerminal"
+        },
+        {
+            "name": "Docker: Python - General",
+            "type": "docker",
+            "request": "launch",
+            "preLaunchTask": "docker-run: debug",
+            "python": {
+                "pathMappings": [
+                    {
+                        "localRoot": "${workspaceFolder}",
+                        "remoteRoot": "/app"
+                    }
+                ],
+                "projectType": "general"
+            }
         }
     ]
 }
