@@ -1,5 +1,5 @@
 {
-    "python.pythonPath": "/opt/.venv/general/bin/python",
+    "python.pythonPath": "/opt/.venv/sics-kafka/bin/python",
     "python.testing.unittestArgs": [
         "-v",
         "-s",

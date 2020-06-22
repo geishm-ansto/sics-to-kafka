@@ -10,9 +10,9 @@ import zmq
 import warnings
 import time
 
-from kafkahelp import KafkaLogger
-from state import StateProcessor
-from units import UnitManager
+from sicsclient.kafkahelp import KafkaLogger
+from sicsclient.state import StateProcessor
+from sicsclient.units import UnitManager
 
 
 def sics_client(sics, port, state_processor, unit_manager):

@@ -15,7 +15,7 @@ from datetime import datetime
 from sicsclient.cmdbuilder import CommandBuilder
 from sicsclient.helpers import unix_time_milliseconds
 
-base_file = '../config/pln_base.json'
+base_file = './config/pln_base.json'
 
 class TestBuilder(unittest.TestCase):
   '''
@@ -37,7 +37,7 @@ class TestBuilder(unittest.TestCase):
   
   def test_build(self):
     # values
-    ofile = './data/temp.json'    
+    ofile = './test/data/temp.json'    
     start = int(unix_time_milliseconds(datetime.utcnow()))
     stop = start + 1000 * 600
     root = "root"
@@ -81,7 +81,7 @@ class TestBuilder(unittest.TestCase):
       builder.add_stream(*st)
 
     # save to temp file and reload
-    ofile = './data/temp.json'
+    ofile = './test/data/temp.json'
     builder.save(ofile)
     builder = CommandBuilder(ofile)
 

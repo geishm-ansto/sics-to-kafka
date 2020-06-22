@@ -3,7 +3,7 @@ import uuid
 import numpy as np
 from datetime import datetime, timedelta
 from collections.abc import Iterable
-from helpers import unix_time_milliseconds
+from sicsclient.helpers import unix_time_milliseconds
 
 
 class CommandBuilder(object):

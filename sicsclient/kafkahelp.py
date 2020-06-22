@@ -1,12 +1,12 @@
 import flatbuffers
 from kafka import KafkaProducer
 
-import pyschema.JsonData as JsonData
-import pyschema.LogData as LogData
-from pyschema.Value import Value
-from pyschema.Int import IntStart, IntAddValue, IntEnd
-from pyschema.Double import DoubleStart, DoubleAddValue, DoubleEnd
-from pyschema.String import StringStart, StringAddValue, StringEnd
+import sicsclient.pyschema.JsonData as JsonData
+import sicsclient.pyschema.LogData as LogData
+from sicsclient.pyschema.Value import Value
+from sicsclient.pyschema.Int import IntStart, IntAddValue, IntEnd
+from sicsclient.pyschema.Double import DoubleStart, DoubleAddValue, DoubleEnd
+from sicsclient.pyschema.String import StringStart, StringAddValue, StringEnd
 
 
 def timestamp_to_nsecs(ts):

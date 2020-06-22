@@ -1,13 +1,13 @@
 
 import json
 
-from pyschema.JsonData import JsonData
-from pyschema.LogData import LogData
-from pyschema.Int import Int
-from pyschema.Double import Double
-from pyschema.String import String
+from sicsclient.pyschema.JsonData import JsonData
+from sicsclient.pyschema.LogData import LogData
+from sicsclient.pyschema.Int import Int
+from sicsclient.pyschema.Double import Double
+from sicsclient.pyschema.String import String
 
-from pyschema.Value import Value
+from sicsclient.pyschema.Value import Value
 
 def extract_json_data(msg):
     jmsg = JsonData.GetRootAsJsonData(bytearray(msg.value), 0)
