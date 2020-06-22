@@ -1,9 +1,6 @@
 # SICS-to-Kafka
 
-Forwards published SICS messages to Kafka. All the messages are forwarded
-as log events using:
-
-- f142, log data flat buffer 
+Forwards published SICS messages to Kafka. Parameter updates are sent to topic 'sics-stream' by default as a 'f142' log message event. Parameter sets values and units are dumped to topic 'sics-units' periodically as 'json' messages. A single json message contains all the parameters and units at a single point in time. 
 
 ## usage
 ```

@@ -9,10 +9,10 @@ updates the kafka server with the units. The kakfka server is assumed to be avai
 import time
 import json
 import unittest
-import pyschema.JsonData as JsonData
-from sicsunits import UnitManager, Parameter
+
 from kafka import KafkaConsumer
-from kafkahelp import timestamp_to_msecs
+from sicsclient.units import UnitManager, Parameter
+from sicsclient.kafkahelp import timestamp_to_msecs
 from help_tests import extract_data
 
 kafka_broker = 'localhost:9092'

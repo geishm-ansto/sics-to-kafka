@@ -11,16 +11,16 @@ import json
 import unittest
 import threading
 
-from forward import sics_client
-from sicsstate import StateProcessor
-from sicsunits import UnitManager
+from sicsclient.client import sics_client
+from sicsclient.state import StateProcessor
+from sicsclient.units import UnitManager
 from kafka import KafkaConsumer
 
-from pyschema.Int import Int
-from pyschema.Double import Double
-from pyschema.String import String
-from pyschema.LogData import LogData
-from pyschema.Value import Value
+from sicsclient.pyschema.Int import Int
+from sicsclient.pyschema.Double import Double
+from sicsclient.pyschema.String import String
+from sicsclient.pyschema.LogData import LogData
+from sicsclient.pyschema.Value import Value
 
 Msgs = [
     b'{ "type": "Value", "name": "\\/instrument\\/detector\\/detector_x\\/ignorefault", "value": 0, "seq": 572, "ts": 1585519280.073885 }',

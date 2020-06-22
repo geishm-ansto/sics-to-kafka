@@ -18,11 +18,11 @@ import unittest
 import threading
 
 from unittest.mock import patch
-from sicsstate import StateProcessor, find_nodes
-from parsexml import Component
-from kafkahelp import timestamp_to_msecs
+from sicsclient.state import StateProcessor, find_nodes
+from sicsclient.parsexml import Component
+from sicsclient.kafkahelp import timestamp_to_msecs
 
-base_file = './config/pln_base.json'
+base_file = '../config/pln_base.json'
 
 component_list = [
     # 'tag', 'value', 'dtype', 'klass', 'mutable', 'nxalias', 'units', 'nxsave'

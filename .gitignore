@@ -11,7 +11,7 @@ nicos/RELEASE-VERSION
 pyschema/__pycache__
 log/*/current
 
-/data/
+/test/data/
 
 doc/build/
 doc/source/auto

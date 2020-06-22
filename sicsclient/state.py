@@ -15,7 +15,7 @@ from queue import Queue
 from parsexml import parsesics
 from cmdbuilder import CommandBuilder
 from kafkahelp import KafkaProducer, timestamp_to_msecs
-from sicsunits import Parameter
+from units import Parameter
 
 
 def find_nodes(clist, tag):

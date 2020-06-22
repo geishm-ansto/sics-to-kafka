@@ -12,10 +12,10 @@ import json
 import unittest
 
 from datetime import datetime
-from cmdbuilder import CommandBuilder
-from helpers import unix_time_milliseconds
+from sicsclient.cmdbuilder import CommandBuilder
+from sicsclient.helpers import unix_time_milliseconds
 
-base_file = './config/pln_base.json'
+base_file = '../config/pln_base.json'
 
 class TestBuilder(unittest.TestCase):
   '''

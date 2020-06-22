@@ -4,8 +4,8 @@ import json
 import threading
 from collections import namedtuple
 from kafkahelp import KafkaLogger
-Parameter = namedtuple('Parameter', ['value', 'unit'])
 
+Parameter = namedtuple('Parameter', ['value', 'unit'])
 
 class UnitManager(object):
     '''

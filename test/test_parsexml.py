@@ -11,9 +11,9 @@ import time
 import json
 import unittest
 
-from parsexml import parsesics
+from sicsclient.parsexml import parsesics
 
-testfile = './data/gumtreexml.xml'
+testfile = './test/data/gumtreexml.xml'
 
 
 class TestXMLParser(unittest.TestCase):

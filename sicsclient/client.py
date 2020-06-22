@@ -11,8 +11,8 @@ import warnings
 import time
 
 from kafkahelp import KafkaLogger
-from sicsstate import StateProcessor
-from sicsunits import UnitManager
+from state import StateProcessor
+from units import UnitManager
 
 
 def sics_client(sics, port, state_processor, unit_manager):
@@ -57,7 +57,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--topic', help='Publish to Kafka topic', default='sics-stream')
     parser.add_argument(
-        '--base', help='Base command file format', default='./config/base_file.json')
+        '--base', help='Base command file format', default='../config/base_file.json')
     args = parser.parse_args()
 
     unit_manager = UnitManager(args.broker)
