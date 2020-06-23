@@ -4,12 +4,15 @@
   {State, Status} messages to the StateProcessor or the {Value}
   messages to the UnitManager objects.
 """
+import os
+import sys
 import argparse
 import json
 import zmq
 import warnings
 import time
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 from sicsclient.kafkahelp import KafkaLogger
 from sicsclient.state import StateProcessor
 from sicsclient.units import UnitManager
@@ -63,4 +66,4 @@ if __name__ == '__main__':
     unit_manager = UnitManager(args.broker)
     state_processor = StateProcessor(
         args.sics, args.xport, args.base, unit_manager, kafka_broker=args.broker, stream_topic=args.topic)
-    sics_client(args.sics, args.port, args.broker, args.topic, state_processor)
+    sics_client(args.sics, args.port, state_processor, unit_manager)

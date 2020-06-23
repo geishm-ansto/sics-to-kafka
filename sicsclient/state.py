@@ -18,6 +18,7 @@ from sicsclient.kafkahelp import KafkaProducer, timestamp_to_msecs
 from sicsclient.units import Parameter
 
 
+
 def find_nodes(clist, tag):
     '''
     Finds the list of nodes that match the tag in the Component list.

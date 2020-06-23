@@ -12,13 +12,13 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "Forward",
+            "name": "SICS-Kafka",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/forward.py",
+            "program": "${workspaceFolder}/sicsclient/client.py",
             "args": [
                 "--topic",
-                "sics_stream"
+                "sics-stream"
             ],
             "console": "integratedTerminal"
         },
