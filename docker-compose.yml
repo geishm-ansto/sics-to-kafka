@@ -3,6 +3,7 @@ version: '3.4'
 services:
   sicstokafka:
     image: sicstokafka
+    network_mode: host
     build:
       context: .
       dockerfile: Dockerfile

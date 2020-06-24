@@ -2,7 +2,8 @@
 flatbuffers
 numpy
 h5py
-kafka
+confluent-kafka
+kafka-python
 pyzmq
 xmltodict
 

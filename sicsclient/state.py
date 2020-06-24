@@ -16,8 +16,9 @@ from sicsclient.parsexml import parsesics
 from sicsclient.cmdbuilder import CommandBuilder
 from sicsclient.kafkahelp import KafkaProducer, timestamp_to_msecs
 from sicsclient.units import Parameter
+from sicsclient.helpers import get_module_logger
 
-
+logger = get_module_logger(__name__)
 
 def find_nodes(clist, tag):
     '''
@@ -72,7 +73,7 @@ class StateProcessor(object):
         self.socket.setsockopt(zmq.IDENTITY, self.ident.encode('utf-8'))
         self.socket.setsockopt(zmq.RCVTIMEO, self.recv_wait)
         self.socket.connect(self.end_point.encode('utf-8'))
-        print('zmq.DEALER {} connection to {}'.format(
+        logger.info('zmq.DEALER {} connection to {}'.format(
             self.ident, self.end_point))
 
     def add_hdf_component(self, cmp):
@@ -100,7 +101,7 @@ class StateProcessor(object):
         if resp and resp['flag'].lower() == 'ok':
             clist = parsesics(resp['reply'])
         else:
-            print('Unable to recover gumtreexml')
+            logger.warning('Unable to recover gumtreexml')
             self.cmd_builder = None
             clist = []
         return clist
@@ -115,7 +116,7 @@ class StateProcessor(object):
         '''
         # if a start scan was initiated then raise an alert
         if self.cmd_builder:
-            print('Ignoring previous start scan that was not completed!')
+            logger.info('Ignoring previous start scan that was not completed!')
         self.cmd_builder = None
 
         # get the component list form the xml description
@@ -131,7 +132,7 @@ class StateProcessor(object):
             file_name, file_ext = os.path.splitext(fnames[0].value)
             file_name = file_name + '.nxs'
         else:
-            print('Need file name to complete write request')
+            logger.warning('Need file name to complete write request')
             return
 
         # load the default command string for the instrument
@@ -159,7 +160,7 @@ class StateProcessor(object):
         Finally it issues a write request.
         '''
         if not self.cmd_builder:
-            print('Missing start scan event - do nothing!')
+            logger.warning('Missing start scan event - do nothing!')
             return
 
         # if the stop time was not specified then set it
@@ -174,7 +175,7 @@ class StateProcessor(object):
         # For now just issue a write command and forget, if we need a status
         # then the command builder or the job id may need to managed until
         # the write is confirmed. Just delete until more is needed.
-        print('Issued write request to the nexus writer topic')
+        logger.info('Issued write request to the nexus writer topic')
         self.cmd_builder = None
 
     def send_write_cmd(self, timestamp_ms, json_cmd):
@@ -204,8 +205,8 @@ class StateProcessor(object):
         except Exception as exc:
             # There is a significant risk of a dead lock with the ZMQ client server model
             # so after printing the message re-establish the connection
-            print('ZeroMQ: {}'.format(str(exc)))
-            print('Re-establishing connection because of the failure...')
+            logger.error('ZeroMQ: {}'.format(str(exc)))
+            logger.info('Re-establishing connection because of the failure...')
             self.open_connection(recover=True)
         return {}
 

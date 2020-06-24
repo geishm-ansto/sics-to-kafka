@@ -4,6 +4,9 @@ import os
 import xmltodict
 
 from collections import namedtuple, OrderedDict
+from sicsclient.helpers import get_module_logger
+
+logger = get_module_logger(__name__)
 
 Component = namedtuple(
     'Component', ['tag', 'value', 'dtype', 'klass', 'mutable', 'nxalias', 'units', 'nxsave'])
@@ -68,7 +71,7 @@ def parse(clist, tag, nodes, folder):
             try:
                 dtype = node['@dataType']
             except (TypeError, KeyError, IndexError):
-                print('{}: {}'.format(tag, folder))
+                logger.warning('Missing data type for {}: {}'.format(tag, folder))
                 return
             if dtype in ['int', 'float', 'text']:
                 cmp = get_component(node, folder)

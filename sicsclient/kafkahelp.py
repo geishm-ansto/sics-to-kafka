@@ -8,6 +8,9 @@ from sicsclient.pyschema.Int import IntStart, IntAddValue, IntEnd
 from sicsclient.pyschema.Double import DoubleStart, DoubleAddValue, DoubleEnd
 from sicsclient.pyschema.String import StringStart, StringAddValue, StringEnd
 
+from sicsclient.helpers import get_module_logger
+
+logger = get_module_logger(__name__)
 
 def timestamp_to_nsecs(ts):
     return int(ts * 1e9)
@@ -63,7 +66,7 @@ class KafkaLogger(object):
         try:
             (posn, val_type) = MapValue[type(value)](builder, value)
         except (KeyError):
-            print('No suitable builder for type {}'.format(type(value)))
+            logger.warning('No suitable builder for type {}'.format(type(value)))
             return None
 
         # Build the actual buffer

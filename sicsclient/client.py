@@ -14,9 +14,11 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 from sicsclient.kafkahelp import KafkaLogger
+from sicsclient.helpers import get_module_logger
 from sicsclient.state import StateProcessor
 from sicsclient.units import UnitManager
 
+logger = get_module_logger(__name__)
 
 def sics_client(sics, port, state_processor, unit_manager):
 
@@ -26,22 +28,22 @@ def sics_client(sics, port, state_processor, unit_manager):
 
     # filter messages by type
     socket.setsockopt(zmq.SUBSCRIBE, b"")
-    print("Collecting updates from SICS at {}".format(sics))
+    logger.info("Collecting updates from SICS at {}".format(sics))
 
     while True:
         try:
             message = socket.recv().decode('utf-8')
             response = json.loads(message)
-            print("{:.4f}: {}: {}: {}".format(
+            logger.debug("{:.4f}: {}: {}: {}".format(
                 response["ts"], response["type"], response["name"], response['value']))
             if response["type"] == "Value":
                 unit_manager.new_value_event(response)
             elif state_processor and response["type"] in ["State", "Status"]:
                 state_processor.add_event(response)
             else:
-                warnings.warn("Unsupported: {}".format(str(response)))
+                logger.warning("Unsupported: {}".format(str(response)))
         except Exception as e:
-            print(e)
+            logger.error(str(e))
             time.sleep(1)
             # need to restablish connection??
             # TODO
