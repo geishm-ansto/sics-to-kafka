@@ -53,8 +53,8 @@ class TestBuilder(unittest.TestCase):
     builder = CommandBuilder(ofile)
     cmd = builder.get_command()
     self.assertEqual(cmd["job_id"], job_id)
-    self.assertEqual(cmd["start_time"], str(start))
-    self.assertEqual(cmd["stop_time"], str(stop))
+    self.assertEqual(cmd["start_time"], start)
+    self.assertEqual(cmd["stop_time"], stop)
     node = builder.get_root()
     self.assertTrue(node != None)
     self.assertEqual(node["name"], root)    
@@ -70,8 +70,8 @@ class TestBuilder(unittest.TestCase):
 
     # name, topic, source, writer, dtype, attributes
     streams = [
-      ('sample/some_temp', 'sics_stream', 'sample/some_temp', 'f142', 'float', [('units','Deg')]),
-      ('sample/fixed_temp', 'sics_stream', 'sample/fixed_temp', 'sval', 'float', [('units','Deg C')])
+      ('sample/some_temp', 'sics_stream', 'sample/some_temp', 'f142', 'float', 12.3, [('units','Deg')]),
+      ('sample/fixed_temp', 'sics_stream', 'sample/fixed_temp', 'sval', 'float', 0.0, [('units','Deg C')])
     ]
 
     builder = CommandBuilder(base_file, name_stream=True)

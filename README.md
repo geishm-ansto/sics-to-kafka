@@ -17,7 +17,7 @@ the parameters that should be saved to the HDF file by 'getgumtreexml /' and to 
 
 The main components within the code are:
 
-#### forward.py 
+#### client.py 
 The module subscribes to the SICS stream and monitors the message flow. Value messages are forwarded to kafka and the 
 unit manager while state messages are forwarded to the state processor.
 

@@ -25,6 +25,25 @@
 			"python": {
 				"file": "sicsclient/client.py"
 			}
+		},
+		{
+			"type": "docker-build",
+			"label": "build-tunnel",
+			"dockerBuild": {
+				"tag": "ssh-tunnel:latest",
+				"dockerfile": "${workspaceFolder}/Dockerfile-sshtunnel",
+				"context": "${workspaceFolder}",
+				"pull": true,
+				"buildArgs": {
+					"http_proxy": "http://www-proxy.nbi.ansto.gov.au:3128/",
+					"https_proxy": "http://www-proxy.nbi.ansto.gov.au:3128/"
+				}
+			},
+			"problemMatcher": [],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
 		}
 	]
 }

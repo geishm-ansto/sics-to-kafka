@@ -2,12 +2,11 @@
     "cmd": "FileWriter_new",
     "broker": "localhost:9092",
     "job_id": "JOBID",
+    "service_id": "filewriter1",
     "use_hdf_swmr": false,
     "start_time": "STARTTIME",
     "stop_time": "STOPTIME",
-    "file_attributes": {
-        "file_name": "OFILE"
-    },
+    "file_name": "OFILE",
     "nexus_structure": {
         "children": [
             {

@@ -34,17 +34,17 @@ def create_consumer(topic, timeout_ms=5000):
 class TestUnits(unittest.TestCase):
 
     unit_values = {
-        '/monitor/bm1_counts': Parameter(1234, 'count'),
-        '/monitor/bm1_event_rate': Parameter(12.34, 'count/sec'),
-        '/instrument/aperture/sh1': Parameter(10.0, 'mm'),
-        '/instrument/detector/tofw': Parameter(100.5, 'microseconds'),
-        '/instrument/detector/total_counts': Parameter(123400, 'count'),
-        '/sample/bsr': Parameter(22.5, 'degC')
+        'monitor/bm1_counts': Parameter(1234, 'count'),
+        'monitor/bm1_event_rate': Parameter(12.34, 'count/sec'),
+        'instrument/aperture/sh1': Parameter(10.0, 'mm'),
+        'instrument/detector/tofw': Parameter(100.5, 'microseconds'),
+        'instrument/detector/total_counts': Parameter(123400, 'count'),
+        'sample/bsr': Parameter(22.5, 'degC')
     }
 
     values = [
-        b'{ "type": "Value", "name": "\\/monitor\\/bm1_counts", "value": 3456, "seq": 572, "ts": 1585519280.073885 }',
-        b'{ "type": "Value", "name": "\\/monitor\\/bm1_event_rate", "value": 10.0, "seq": 573, "ts": 1585519281.073885 }',
+        b'{ "type": "Value", "name": "monitor\\/bm1_counts", "value": 3456, "seq": 572, "ts": 1585519280.073885 }',
+        b'{ "type": "Value", "name": "monitor\\/bm1_event_rate", "value": 10.0, "seq": 573, "ts": 1585519281.073885 }',
     ]
 
     def confirm_unit_values(self, kafka_message, ref_values):

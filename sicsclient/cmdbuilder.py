@@ -24,27 +24,24 @@ class CommandBuilder(object):
         else:
             start = datetime.utcnow()
             start = int(unix_time_milliseconds(start))
-        start_str = str(start)
         job_id = str(uuid.uuid4())
 
         self.command = {
             "cmd": "FileWriter_new",
             "job_id": job_id,
             "broker": broker,
-            "start_time": start_str,
+            "start_time": start,
             "service_id": "filewriter1",
             "abort_on_uninitialised_stream": False,
             "use_hdf_swmr": True,
-            "file_attributes": {
-                "file_name": filename
-            }
+            "file_name": filename
         }
         self.command["nexus_structure"] = {"children": [
             self._hdf_group(root, [("NX_class", "NXentry")])]}
         if stop_time_ms:
-            self.command["stop_time"] = str(int(stop_time_ms))
+            self.command["stop_time"] = int(stop_time_ms)
 
-    def add_stream(self, name, topic, source, writer, dtype, attributes):
+    def add_stream(self, name, topic, source, writer, dtype, values, attributes):
         # assumes the name is the full path separated by '/' excluding the root entry
         npath = name.split('/')
         rnode = self.get_root()
@@ -53,27 +50,21 @@ class CommandBuilder(object):
         # find the path and create if necessary
         pnode = self._find_node(rnode, npath[:-1], create=True)
         if writer == "sval":
-            node = self._hdf_sval_stream(npath[-1], topic, source, dtype, attributes)
+            node = self._hdf_sval_stream(npath[-1], topic, source, dtype, values, attributes)
         else:
             node = self._hdf_stream(
-                npath[-1], topic, source, writer, dtype, attributes)
+                npath[-1], topic, source, writer, dtype, values, attributes)
         pnode["children"].append(node)
 
     def set_param(self, filename=None, start_time_ms=None, stop_time_ms=None, root=None, broker=None, job_id=None):
         if filename:
-            try:
-                fa = self.command["file_attributes"]
-                fa["filename"] = filename
-            except KeyError:
-                self.command["file_attributes"] = {
-                    "file_name": filename
-                }
+            self.command["file_name"] = filename
         if start_time_ms:
             # passed in as unix time in ms
-            self.command["start_time"] = str(start_time_ms)
+            self.command["start_time"] = int(start_time_ms)
         if stop_time_ms:
             # passed in as unix time in ms
-            self.command["stop_time"] = str(stop_time_ms)
+            self.command["stop_time"] = int(stop_time_ms)
         if root:
             node = self.get_root()
             if node:
@@ -105,8 +96,14 @@ class CommandBuilder(object):
         with open(ofile, 'w') as f:
             f.write(jstr)
 
+    def get_value(self, tag):
+        try:
+            return self.command[tag]
+        except KeyError:
+            return None
+
     def get_command(self):
-        return self.command.copy()
+        return self.command
 
     def get_start_time(self):
         # epoch time in msec
@@ -141,7 +138,7 @@ class CommandBuilder(object):
                                 for k, v in attributes]
         return el
 
-    def _hdf_stream(self, name, topic, source, writer, dtype, attributes):
+    def _hdf_stream(self, name, topic, source, writer, dtype, values, attributes):
 
         el = {
             "type": "group",
@@ -158,12 +155,16 @@ class CommandBuilder(object):
                 }
             ]
         }
+        if values is not None:
+            _, target = self._map_values(values)
+            el["children"][0]["stream"]["initial_value"] = target
+
         if attributes:
             el['attributes'] = [{'name': k, 'values': v}
                                 for k, v in attributes]
         return el
 
-    def _hdf_sval_stream(self, name, topic, source, dtype, attributes):
+    def _hdf_sval_stream(self, name, topic, source, dtype, values, attributes):
 
         el = {
             "type": "stream",
@@ -178,6 +179,9 @@ class CommandBuilder(object):
         }
         if self.name_stream:
             el["name"] = name   # debugging
+        if values is not None:
+            _, target = self._map_values(values)
+            el["stream"]["initial_value"] = target
         if attributes:
             addnl_attr = []
             for k, v in attributes:
@@ -204,6 +208,22 @@ class CommandBuilder(object):
                 break
         return shape
 
+    def _map_values(self, values):
+        # need to handle single values or nested lists or numpy arrays
+        # start with numpy objects
+        size = None
+        target = None
+        if isinstance(values, np.ndarray):
+            size = list(values.shape)
+            target = values.tolist()
+        elif isinstance(values, list):
+            # assume it may be a nested list
+            size = self._nested_list_shape(values)
+            target = values
+        else:
+            target = values
+        return size, target
+
     def _hdf_dataset(self, name, values, dtype, attributes):
 
         el = {
@@ -214,17 +234,10 @@ class CommandBuilder(object):
             }
         }
 
-        # need to handle single values or nested lists or numpy arrays
-        # start with numpy objects
-        if isinstance(values, np.ndarray):
-            el["dataset"]["size"] = list(values.shape)
-            el["values"] = values.tolist()
-        elif isinstance(values, list):
-            # assume it may be a nested list
-            el["dataset"]["size"] = self._nested_list_shape(values)
-            el["values"] = values
-        else:
-            el["values"] = values
+        size, target = self._map_values(values)
+        if size:
+            el["dataset"]["size"] = size
+        el["values"] = target
 
         if attributes:
             el['attributes'] = [{'name': k, 'values': v}

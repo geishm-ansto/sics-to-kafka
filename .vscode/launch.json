@@ -17,8 +17,9 @@
             "request": "launch",
             "program": "${workspaceFolder}/sicsclient/client.py",
             "args": [
-                "--topic",
-                "sics-stream"
+                "--topic", "sics-stream",
+                "--base", "${workspaceFolder}/config/pln_base.json",
+                "--loglevel", "DEBUG"
             ],
             "console": "integratedTerminal"
         },

@@ -20,13 +20,14 @@ import threading
 from unittest.mock import patch
 from sicsclient.state import StateProcessor, find_nodes
 from sicsclient.parsexml import Component
-from sicsclient.kafkahelp import timestamp_to_msecs
+from sicsclient.kafkahelp import timestamp_to_msecs, extract_runstart_data
+import sicsclient.pyschema.RunStart as RunStart
 
 base_file = './config/pln_base.json'
-
+ofile = './some_scan.hdf'
 component_list = [
     # 'tag', 'value', 'dtype', 'klass', 'mutable', 'nxalias', 'units', 'nxsave'
-    Component('experiment/file_name', './some_scan.hdf',
+    Component('experiment/file_name', ofile,
               'text', '', False, '', '', True),
     Component('experiment/start_time', 1585519280,
               'int', '', False, '', '', True),
@@ -35,10 +36,12 @@ component_list = [
 ]
 
 # Some mocking objects
+
 def my_get_xml(self):
     return component_list
 
 send_write_mock = unittest.mock.Mock()
+publish_message_mock = unittest.mock.Mock()
 
 class TestStateProcessor(unittest.TestCase):
     '''
@@ -54,6 +57,18 @@ class TestStateProcessor(unittest.TestCase):
         unm = unittest.mock.Mock()
         TestStateProcessor.stp = StateProcessor(
             'localhost', 5555, base_file, unit_manager=unm)
+
+    def _test_dump_xml(self):
+        '''
+        Dump xml data to file
+        '''
+        ofile = './test/data/gumxml_latest.xml'
+        resp = TestStateProcessor.stp.cmd_request('SICS', 'getgumtreexml /')
+        valid = resp and resp['flag'].lower() == 'ok'
+        self.assertTrue(valid)
+        if valid:
+            with open(ofile, 'w') as f:
+                f.write(resp['reply'])
 
     def test_recoverxml(self):
         '''
@@ -85,8 +100,8 @@ class TestStateProcessor(unittest.TestCase):
 
         self.assertTrue(stp.cmd_builder != None)
         cmb = stp.cmd_builder
-        start_cmp = find_nodes(component_list, 'start_time')[0]
-        self.assertEqual(timestamp_to_msecs(start_cmp.value), cmb.get_start_time())
+        #start_cmp = find_nodes(component_list, 'start_time')[0]
+        self.assertEqual(timestamp_to_msecs(start_time), cmb.get_start_time())
 
         # look for the components relative to the root node
         rnode = cmb.get_root()
@@ -105,13 +120,15 @@ class TestStateProcessor(unittest.TestCase):
 
         # confirm that the unit manager receives the unit values
         cargs = stp.unit_manager.set_unit_values.call_args[0]
-        self.assertEqual(cargs[0], start_cmp.value)
+        self.assertEqual(timestamp_to_msecs(
+            cargs[0]), timestamp_to_msecs(start_time))
         arg_values = cargs[1]
         for c in component_list:
             self.assertEqual(c.value, arg_values[c.tag].value)
 
     @patch('test_state.StateProcessor.get_xml_parameters', my_get_xml)
-    @patch('test_state.StateProcessor.send_write_cmd', send_write_mock)
+    #@patch('test_state.StateProcessor.send_write_cmd', send_write_mock)
+    @patch('sicsclient.state.publish_message', publish_message_mock)
     def test_finish_scan(self):
         '''
         Mock the following objects and calls:
@@ -134,10 +151,14 @@ class TestStateProcessor(unittest.TestCase):
         stp.end_scan(stop_time)
 
         # confirm cmd was sent to the kafka writer
-        cargs = stp.send_write_cmd.call_args[0]
-        self.assertEqual(cargs[0], timestamp_to_msecs(stop_time))
-        cmd = json.loads(cargs[1])
-        self.assertEqual(cmd['cmd'], 'FileWriter_new')
+        cargs = publish_message_mock.call_args[0]
+        self.assertEqual(cargs[2], timestamp_to_msecs(stop_time))
+        self.assertEqual(cargs[1], 'TEST_writerCommand')
+        resp = extract_runstart_data(cargs[3])
+        basename = os.path.basename(ofile)
+        ss = basename.split('.')
+        file_name = ss[0] + '.nxs'
+        self.assertEqual(resp['file_name'].decode('utf-8'), file_name)
 
 
 if __name__ == '__main__':

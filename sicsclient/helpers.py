@@ -21,7 +21,7 @@ def get_module_logger(mod_name):
         '%(asctime)s [%(name)-12s] %(levelname)-8s %(message)s')
     handler.setFormatter(formatter)
     logger.addHandler(handler)
-    logger.setLevel(logging.DEBUG)
+    logger.propagate = False
     return logger
 
 def unix_time_milliseconds(dt):

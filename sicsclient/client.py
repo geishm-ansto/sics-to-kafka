@@ -11,6 +11,7 @@ import json
 import zmq
 import warnings
 import time
+import logging
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 from sicsclient.kafkahelp import KafkaLogger
@@ -20,15 +21,19 @@ from sicsclient.units import UnitManager
 
 logger = get_module_logger(__name__)
 
-def sics_client(sics, port, state_processor, unit_manager):
-
+def open_connection(sics, port):
     context = zmq.Context()
     socket = context.socket(zmq.SUB)
     socket.connect('tcp://{}:{}'.format(sics, port))
 
-    # filter messages by type
+    # wait indefinitely for message
     socket.setsockopt(zmq.SUBSCRIBE, b"")
-    logger.info("Collecting updates from SICS at {}".format(sics))
+    logger.info("Collecting updates from SICS at {}".format(sics)) 
+    return socket   
+
+def sics_client(sics, port, state_processor, unit_manager):
+
+    socket = open_connection(sics, port)
 
     while True:
         try:
@@ -45,8 +50,11 @@ def sics_client(sics, port, state_processor, unit_manager):
         except Exception as e:
             logger.error(str(e))
             time.sleep(1)
-            # need to restablish connection??
-            # TODO
+            # need to restablish connection - shutdown first and reconnect
+            socket.setsockopt(zmq.LINGER, 0)
+            socket.close()
+            time.sleep(1)
+            socket = open_connection(sics, port)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -62,8 +70,15 @@ if __name__ == '__main__':
     parser.add_argument(
         '--topic', help='Publish to Kafka topic', default='sics-stream')
     parser.add_argument(
-        '--base', help='Base command file format', default='../config/base_file.json')
+        '--base', help='Base command file format', default='./config/base_file.json')
+    parser.add_argument(
+        '--loglevel', help='Logging level, default=WARNING', default='warning')
     args = parser.parse_args()
+
+    numeric_level = getattr(logging, args.loglevel.upper(), None)
+    if not isinstance(numeric_level, int):
+        raise ValueError('Invalid log level: %s' % args.loglevel)
+    logger.setLevel(numeric_level)
 
     unit_manager = UnitManager(args.broker)
     state_processor = StateProcessor(

@@ -42,7 +42,11 @@ class UnitManager(object):
         . Send to 'sics-stream'
         Executes in the caller context. 
         '''
-        tag = response['name']
+        # drop the leading '/' 
+        if response['name'][0] == '/':
+            tag = response['name'][1:]
+        else:
+            tag = response['name']
         value = response['value']
         event_ts = response['ts']
         with self.lock:

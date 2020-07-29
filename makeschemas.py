@@ -18,6 +18,7 @@ schemapath = '../streaming-data-types/schemas/'
 
 schemas = glob.glob(schemapath + 'f142*.fbs')
 schemas += glob.glob(schemapath + 'json_json.fbs')
+schemas += glob.glob(schemapath + 'pl72_run_start.fbs')
 
 combase = ['../flatbuffers/flatc', '--python','-I','%s/schemas' %(schemapath),'-o','sicsclient/pyschema']
 for schema in schemas:
