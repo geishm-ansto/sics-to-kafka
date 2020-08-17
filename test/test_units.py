@@ -12,11 +12,10 @@ import unittest
 
 from kafka import KafkaConsumer
 from sicsclient.units import UnitManager, Parameter
-from sicsclient.kafkahelp import timestamp_to_msecs
+from sicsclient.kafkahelp import timestamp_to_msecs, get_kafka_tag_value
 from help_tests import extract_data
 
 kafka_broker = 'localhost:9092'
-ValueTopic = 'TEST_sics_stream'
 UnitTopic = 'TEST_sics_units'
 
 
@@ -65,7 +64,7 @@ class TestUnits(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         TestUnits.unm = UnitManager(kafka_broker, log_period_secs=5,
-                          unit_topic=UnitTopic, value_topic=ValueTopic)
+                          unit_topic=UnitTopic)
 
     def test_value_updated(self):
         '''
@@ -73,39 +72,28 @@ class TestUnits(unittest.TestCase):
         value and timestamp 
         '''
         print('\ntest_value_updated::')
-        # launch the consumer that only listens for lastest messages
-        consumer = create_consumer(ValueTopic, timeout_ms=1000)
-        TestUnits.unm.reset_test()
-        TestUnits.unm.set_log_data(False)
-        time.sleep(1)
+        # # launch the consumer that only listens for lastest messages
+        # consumer = create_consumer(ValueTopic, timeout_ms=1000)
+        # TestUnits.unm.reset_test()
+        # TestUnits.unm.set_log_data(False)
+        # time.sleep(1)
 
-        # send the messages and confirm they are present in the value topic
+        # send the messages and confirm they have been updated in the local copy
+        ix = 0
         for line in self.values:
             msg = json.loads(line)
             msg['ts'] = time.time()
-            TestUnits.unm.new_value_event(msg)
+            TestUnits.unm.value_event(msg)
 
-        time.sleep(1)
-        ix = 0
-        for msg in consumer:
-            rsp = extract_data(msg)
-            ref = json.loads(self.values[ix].decode('utf-8'))
-            #self.assertAlmostEqual(rsp['ts'], ref['ts'], 7)
-            self.assertEqual(rsp['name'], ref['name'])
-            if isinstance(ref['value'], float):
-                self.assertAlmostEqual(rsp['value'], ref['value'], 7)
+            tag, refval = get_kafka_tag_value(msg)
+            pm = TestUnits.unm.get_parameter(tag)
+            self.assertTrue(pm)
+            if isinstance(pm.value, float):
+                self.assertAlmostEqual(pm.value, refval, 7)
             else:
-                self.assertEqual(rsp['value'], ref['value'])
+                self.assertEqual(pm.value, refval)
             ix += 1
         self.assertEqual(ix, len(self.values))
-
-        # and that the value is updated
-        for msg in self.values:
-            ref = json.loads(msg)
-            self.assertEqual(TestUnits.unm.get_parameter(
-                ref['name']).value, ref['value'])
-
-        time.sleep(1)
 
     def test_snapshot(self):
         '''
@@ -113,9 +101,6 @@ class TestUnits(unittest.TestCase):
         '''
         print('\ntest_snapshot::')
         consumer = create_consumer(UnitTopic, timeout_ms=1000)
-
-        #unm = UnitManager(kafka_broker, log_period_secs=1000,
-        #                  unit_topic=UnitTopic, value_topic=ValueTopic)
         TestUnits.unm.reset_test()
         TestUnits.unm.set_log_data(False)
         ts = time.time()

@@ -11,8 +11,9 @@ import time
 import json
 import uuid
 
+from datetime import datetime
 from queue import Queue
-from sicsclient.parsexml import parsesics
+from sicsclient.parsexml import parsesics, Component
 from sicsclient.cmdbuilder import CommandBuilder
 from sicsclient.kafkahelp import (KafkaProducer, timestamp_to_msecs,
                                   create_runstart_message, publish_message)
@@ -20,7 +21,6 @@ from sicsclient.units import Parameter
 from sicsclient.helpers import get_module_logger
 
 logger = get_module_logger(__name__)
-
 
 def find_nodes(clist, tag):
     '''
@@ -95,10 +95,10 @@ class StateProcessor(object):
             self.zmq_failure()
             return False
 
-    def add_hdf_component(self, cmp):
+    def add_hdf_component(self, cmp, stream_source=None):
         '''
         Add each component to the command builderProcess each component where:
-        . 'f142' type {int,flt}, mutable
+        . 'f142' type {txt,int,flt}, mutable
         . 'dataset' type {txt,int,flt}, not mutable
 
         The f142 writer does not support string streams so 'text' is captured as 
@@ -114,12 +114,13 @@ class StateProcessor(object):
             dtype_ = nxmap[cmp.dtype]
         except KeyError:
             dtype_ = cmp.dtype
-        if cmp.mutable and dtype_ != 'string':
+        if cmp.mutable:
             atts = [('units', cmp.units)] if cmp.units else []
+            source = stream_source if stream_source else cmp.tag            
             self.cmd_builder.add_stream(
                 # uses the simple stream 's142' rather than 'f142' which includes alarm
                 # status information from nicos or epics
-                cmp.tag, self.stream_topic, cmp.tag, 's142', dtype_, cmp.value, atts)
+                cmp.tag, self.stream_topic, source, 's142', dtype_, cmp.value, atts)
         else:
             atts = [('units', cmp.units)] if cmp.units else []
             self.cmd_builder.add_dataset(cmp.tag, cmp.value, dtype_, atts)
@@ -190,6 +191,25 @@ class StateProcessor(object):
                 filename=file_name, start_time_ms=start_time_ms,
                 stop_time_ms=stop_time_ms, job_id=str(uuid.uuid4()))
 
+            # specific parameters not recovered from xml dump
+            # /entry/start_time, ../end_time  | stream : string
+            # /entry/run_mode                 | stream : string  
+            # /entry/experiment_identifier    | NA
+            # /entry/time_stamp               | stream : int
+            # /entry/program_name             | NA
+            # /entry/program_revision         | NA
+            # /entry/data ... folder /w links | build explicitly
+            iso_start = datetime.fromtimestamp(start_time).isoformat(' ', 'seconds')
+            addnl_cmps = [
+                (Component("program_name", 'SICS-ESS', 'text', '', False, '', '', True), None),
+                (Component("program_revision", 'NA', 'text', '', False, '', '', True), None),
+                (Component("start_time", iso_start, 'text', '', False, '', '', True), None),
+                (Component("run_mode", None, 'text', '', True, '', '', True), "entry/run_mode"),
+                (Component("time_stamp", None, 'int', '', True, '', '', True), "entry/time_stamp")
+            ]
+            for cmp, src in addnl_cmps:
+                self.add_hdf_component(cmp, src)
+
             # finally add the hdf nodes from the component list ad forward the component list
             # to the unit manager
             unit_values = {}
@@ -213,6 +233,14 @@ class StateProcessor(object):
         if not self.cmd_builder:
             logger.warning('Missing start scan event - do nothing!')
             return
+
+        # for now only add the end time
+        iso_end = datetime.fromtimestamp(finish_ts_secs).isoformat(' ', 'seconds')
+        addnl_cmps = [
+            (Component("end_time", iso_end, 'text', '', False, '', '', True), None)
+        ]
+        for cmp, src in addnl_cmps:
+            self.add_hdf_component(cmp)
 
         # if the stop time was not specified then set it
         if not self.cmd_builder.get_stop_time():

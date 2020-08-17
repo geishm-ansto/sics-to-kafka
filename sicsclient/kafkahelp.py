@@ -188,3 +188,17 @@ def publish_message(producer, topic, timestamp_msec, msg):
     producer.send(
         topic, msg, timestamp_ms=timestamp_msec)
     producer.flush()
+
+def get_kafka_tag_value(sics_msg):
+    msg_type = sics_msg['type'].lower()
+    if msg_type == 'value':
+        # drop the leading '/' 
+        if sics_msg['name'][0] == '/':
+            tag = sics_msg['name'][1:]
+        else:
+            tag = sics_msg['name']
+        value = sics_msg['value']
+    else:
+        tag = msg_type
+        value = '{}: {}'.format(sics_msg['name'], sics_msg['value'])
+    return tag, value

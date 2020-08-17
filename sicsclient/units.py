@@ -3,7 +3,7 @@ import time
 import json
 import threading
 from collections import namedtuple
-from sicsclient.kafkahelp import KafkaLogger
+from sicsclient.kafkahelp import KafkaLogger, get_kafka_tag_value
 
 Parameter = namedtuple('Parameter', ['value', 'unit'])
 
@@ -17,13 +17,12 @@ class UnitManager(object):
     '''
 
     def __init__(self, broker, log_period_secs=60,
-                 unit_topic='sics-units', value_topic='sics-stream'):
+                 unit_topic='sics-units'):
 
         self.unit_values = {}
         self.log_period = log_period_secs
         self.log_data = True
         self.unit_topic = unit_topic
-        self.value_topic = value_topic
         self.kafka = KafkaLogger(broker)
         self.time_offset = 0
 
@@ -35,29 +34,17 @@ class UnitManager(object):
     def __del__(self):
         del self.kafka
         
-    def new_value_event(self, response):
+    def value_event(self, response):
         '''
-        Changed value event from SICS.
-        . Update local copy
-        . Send to 'sics-stream'
-        Executes in the caller context. 
+        Update local copy from the coller context.
         '''
-        # drop the leading '/' 
-        if response['name'][0] == '/':
-            tag = response['name'][1:]
-        else:
-            tag = response['name']
-        value = response['value']
-        event_ts = response['ts']
+        tag, value = get_kafka_tag_value(response)
         with self.lock:
             try:
                 unit = self.unit_values[tag].unit
                 self.unit_values[tag] = Parameter(value, unit)
             except KeyError:
                 self.unit_values[tag] = Parameter(value, "")
-
-        self.kafka.publish_f142_message(
-            self.value_topic, event_ts, tag, value)
 
     def set_unit_values(self, timestamp, unit_values):
         '''

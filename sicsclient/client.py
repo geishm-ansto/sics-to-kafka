@@ -14,7 +14,7 @@ import time
 import logging
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
-from sicsclient.kafkahelp import KafkaLogger
+from sicsclient.kafkahelp import KafkaLogger, get_kafka_tag_value
 from sicsclient.helpers import get_module_logger
 from sicsclient.state import StateProcessor
 from sicsclient.units import UnitManager
@@ -31,9 +31,10 @@ def open_connection(sics, port):
     logger.info("Collecting updates from SICS at {}".format(sics)) 
     return socket   
 
-def sics_client(sics, port, state_processor, unit_manager):
+def sics_client(sics, port, state_processor, unit_manager, broker, sics_topic):
 
     socket = open_connection(sics, port)
+    kafka_logger = KafkaLogger(broker)
 
     while True:
         try:
@@ -42,11 +43,17 @@ def sics_client(sics, port, state_processor, unit_manager):
             logger.debug("{:.4f}: {}: {}: {}".format(
                 response["ts"], response["type"], response["name"], response['value']))
             if response["type"] == "Value":
-                unit_manager.new_value_event(response)
-            elif state_processor and response["type"] in ["State", "Status"]:
+                unit_manager.value_event(response)
+            elif response["type"] in ["State", "Status"]:
                 state_processor.add_event(response)
             else:
                 logger.warning("Unsupported: {}".format(str(response)))
+
+            # copy the message to the sics stream
+            event_ts = response["ts"]
+            tag, value = get_kafka_tag_value(response)
+            kafka_logger.publish_f142_message(sics_topic, event_ts, tag, value)
+
         except Exception as e:
             logger.error(str(e))
             time.sleep(1)
@@ -83,4 +90,4 @@ if __name__ == '__main__':
     unit_manager = UnitManager(args.broker)
     state_processor = StateProcessor(
         args.sics, args.xport, args.base, unit_manager, kafka_broker=args.broker, stream_topic=args.topic)
-    sics_client(args.sics, args.port, state_processor, unit_manager)
+    sics_client(args.sics, args.port, state_processor, unit_manager, args.broker, sics_topic=args.topic)

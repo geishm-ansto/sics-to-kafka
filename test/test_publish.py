@@ -121,14 +121,14 @@ class TestForwarding(unittest.TestCase):
         cls.broker = 'localhost:9092'
         cls.sics_url = 'localhost'
         cls.port = 5566
-        cls.topic = 'sics-stream'
+        cls.topic = 'TEST-sics'
         cls.xport = 5555
         cls.base_file = './config/pln_base.json'
-        cls.unit_manager = UnitManager(cls.broker, value_topic=cls.topic)
+        cls.unit_manager = UnitManager(cls.broker)
         cls.state_processor = StateProcessor(
         cls.sics_url, cls.xport, cls.base_file, cls.unit_manager, kafka_broker=cls.broker, stream_topic=cls.topic)
         cls.sics = threading.Thread(target=sics_client, args=(
-            cls.sics_url, cls.port, cls.state_processor, cls.unit_manager), daemon=True)
+            cls.sics_url, cls.port, cls.state_processor, cls.unit_manager, cls.broker, cls.topic), daemon=True)
         cls.sics.start()
 
     def confirm_messages(self, consumer):

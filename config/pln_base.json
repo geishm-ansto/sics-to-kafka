@@ -19,6 +19,48 @@
                         "children": [
                         {
                             "type": "group",
+                            "name": "sics-state",
+                            "children": [
+                                {
+                                    "type": "stream",
+                                    "stream": {
+                                        "dtype": "string",
+                                        "topic": "sics-stream",
+                                        "source": "state",
+                                        "writer_module": "s142"
+                                    }
+                                }
+                            ],
+                            "attributes": [
+                                {
+                                    "name": "NX_class",
+                                    "values": "NXgroup"
+                                }
+                            ]                    
+                        },
+                        {
+                            "type": "group",
+                            "name": "sics-status",
+                            "children": [
+                                {
+                                    "type": "stream",
+                                    "stream": {
+                                        "dtype": "string",
+                                        "topic": "sics-stream",
+                                        "source": "status",
+                                        "writer_module": "s142"
+                                    }
+                                }
+                            ],
+                            "attributes": [
+                                {
+                                    "name": "NX_class",
+                                    "values": "NXgroup"
+                                }
+                            ]                    
+                        },
+                        {
+                            "type": "group",
                             "name": "detector_events",
                             "children": [
                                 {

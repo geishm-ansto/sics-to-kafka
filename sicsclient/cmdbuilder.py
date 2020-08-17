@@ -173,8 +173,7 @@ class CommandBuilder(object):
                 "name": name,
                 "topic": topic,
                 "source": source,
-                "writer_module": "sval",
-                "msgid": "f142"
+                "writer_module": "sval"
             }
         }
         if self.name_stream:
