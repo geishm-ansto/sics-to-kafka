@@ -258,7 +258,8 @@ class CommandBuilder(object):
                         return rnode
                 # next level failed but add if it should be created and pass it down
                 if create:
-                    node = self._hdf_group(npath[1], [("NX_class", "NXgroup")])
+                    node = self._hdf_group(npath[1], [("NX_class", "NXdata")])
+                    #node = self._hdf_group(npath[1], [])
                     cnode["children"].append(node)
                     return self._find_node(node, npath[1:], create=create)
 

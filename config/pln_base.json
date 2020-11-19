@@ -17,93 +17,153 @@
                         "type": "group",
                         "name": "instrument",
                         "children": [
-                        {
-                            "type": "group",
-                            "name": "sics-state",
-                            "children": [
-                                {
-                                    "type": "stream",
-                                    "stream": {
-                                        "dtype": "string",
-                                        "topic": "sics-stream",
-                                        "source": "state",
-                                        "writer_module": "s142"
+                            {
+                                "type": "group",
+                                "name": "fermi_chopper",
+                                "children": [
+                                    {
+                                        "type": "dataset",
+                                        "name": "mchs",
+                                        "dataset": {
+                                            "type": "float"
+                                        },
+                                        "values": 6000.0,
+                                        "attributes": [
+                                            {
+                                                "name": "units",
+                                                "values": "rpm"
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "type": "dataset",
+                                        "name": "schs",
+                                        "dataset": {
+                                            "type": "float"
+                                        },
+                                        "values": 6000.0,
+                                        "attributes": [
+                                            {
+                                                "name": "units",
+                                                "values": "rpm"
+                                            }
+                                        ]
                                     }
-                                }
-                            ],
-                            "attributes": [
-                                {
-                                    "name": "NX_class",
-                                    "values": "NXgroup"
-                                }
-                            ]                    
-                        },
-                        {
-                            "type": "group",
-                            "name": "sics-status",
-                            "children": [
-                                {
-                                    "type": "stream",
-                                    "stream": {
-                                        "dtype": "string",
-                                        "topic": "sics-stream",
-                                        "source": "status",
-                                        "writer_module": "s142"
+                                ],
+                                "attributes": [
+                                    {
+                                        "name": "NX_class",
+                                        "values": "NXdata"
                                     }
-                                }
-                            ],
-                            "attributes": [
-                                {
-                                    "name": "NX_class",
-                                    "values": "NXgroup"
-                                }
-                            ]                    
-                        },
-                        {
-                            "type": "group",
-                            "name": "detector_events",
-                            "children": [
-                                {
-                                    "type": "stream",
-                                    "stream": {
-                                        "topic": "neutron_events",
-                                        "source": "Ansto",
-                                        "writer_module": "ev42"
+                                ]                  
+                            },
+                            {
+                                "type": "group",
+                                "name": "sics-state",
+                                "children": [
+                                    {
+                                        "type": "stream",
+                                        "stream": {
+                                            "dtype": "string",
+                                            "topic": "sics-stream",
+                                            "source": "state",
+                                            "writer_module": "s142"
+                                        }
                                     }
-                                }
-                            ],
-                            "attributes": [
-                                {
-                                    "name": "NX_class",
-                                    "values": "NXgroup"
-                                }
-                            ]
-                        },
-                        {
-                            "type": "group",
-                            "name": "chopper_events",
-                            "children": [
-                                {
-                                    "type": "stream",
-                                    "stream": {
-                                        "topic": "primary_chopper",
-                                        "source": "Ansto",
-                                        "writer_module": "tdct"
+                                ]                 
+                            },
+                            {
+                                "type": "group",
+                                "name": "sics-status",
+                                "children": [
+                                    {
+                                        "type": "stream",
+                                        "stream": {
+                                            "dtype": "string",
+                                            "topic": "sics-stream",
+                                            "source": "status",
+                                            "writer_module": "s142"
+                                        }
                                     }
-                                }
-                            ],
-                            "attributes": [
-                                {
-                                    "name": "NX_class",
-                                    "values": "NXgroup"
-                                }
-                            ]
-                        }
+                                ]                    
+                            },
+                            {
+                                "type": "group",
+                                "name": "detector_events",
+                                "children": [
+                                    {
+                                        "type": "stream",
+                                        "stream": {
+                                            "topic": "neutron_events",
+                                            "source": "Ansto",
+                                            "writer_module": "ev42"
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "type": "group",
+                                "name": "chopper_events",
+                                "children": [
+                                    {
+                                        "type": "stream",
+                                        "stream": {
+                                            "topic": "primary_chopper",
+                                            "source": "Ansto",
+                                            "writer_module": "tdct"
+                                        }
+                                    }
+                                ]
+                            }
                         ],
                         "attributes": [
                             {
                                 "name": "NX_class",
                                 "values": "NXinstrument"
+                            }
+                        ]
+                    },
+                    {
+                        "type": "group",
+                        "name": "experiment",
+                        "children": [],
+                        "attributes": [
+                            {
+                                "name": "NX_class",
+                                "values": "NXnote"
+                            }
+                        ]
+                    },
+                    {
+                        "type": "group",
+                        "name": "monitor",
+                        "children": [],
+                        "attributes": [
+                            {
+                                "name": "NX_class",
+                                "values": "NXmonitor"
+                            }
+                        ]
+                    },
+                    {
+                        "type": "group",
+                        "name": "sample",
+                        "children": [],
+                        "attributes": [
+                            {
+                                "name": "NX_class",
+                                "values": "NXsample"
+                            }
+                        ]
+                    },
+                    {
+                        "type": "group",
+                        "name": "user",
+                        "children": [],
+                        "attributes": [
+                            {
+                                "name": "NX_class",
+                                "values": "NXuser"
                             }
                         ]
                     }

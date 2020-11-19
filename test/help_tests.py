@@ -1,13 +1,17 @@
 
 import json
+import time
 
 from sicsclient.pyschema.JsonData import JsonData
 from sicsclient.pyschema.LogData import LogData
 from sicsclient.pyschema.Int import Int
 from sicsclient.pyschema.Double import Double
 from sicsclient.pyschema.String import String
-
 from sicsclient.pyschema.Value import Value
+
+from sicsclient.cmdbuilder import CommandBuilder
+from sicsclient.kafkahelp import (KafkaProducer, timestamp_to_msecs,
+                                  create_runstart_message, publish_message)
 
 def extract_json_data(msg):
     jmsg = JsonData.GetRootAsJsonData(bytearray(msg.value), 0)
@@ -50,3 +54,11 @@ def extract_data(msg):
         return Handlers[mid](msg)
     except KeyError:
         return {}
+
+def send_write_command(filename):
+    timestamp_ms = timestamp_to_msecs(time.time())
+    producer = KafkaProducer(bootstrap_servers=['localhost:9092'])
+    topic = 'TEST_writerCommand'
+    cbld = CommandBuilder(filename)
+    msg = create_runstart_message(cbld.get_command())
+    publish_message(producer, topic, timestamp_ms, msg)
