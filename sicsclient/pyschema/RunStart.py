@@ -105,7 +105,14 @@ class RunStart(object):
             return obj
         return None
 
-def RunStartStart(builder): builder.StartObject(11)
+    # RunStart
+    def Metadata(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(26))
+        if o != 0:
+            return self._tab.String(o + self._tab.Pos)
+        return None
+
+def RunStartStart(builder): builder.StartObject(12)
 def RunStartAddStartTime(builder, startTime): builder.PrependUint64Slot(0, startTime, 0)
 def RunStartAddStopTime(builder, stopTime): builder.PrependUint64Slot(1, stopTime, 0)
 def RunStartAddRunName(builder, runName): builder.PrependUOffsetTRelativeSlot(2, flatbuffers.number_types.UOffsetTFlags.py_type(runName), 0)
@@ -117,4 +124,5 @@ def RunStartAddServiceId(builder, serviceId): builder.PrependUOffsetTRelativeSlo
 def RunStartAddFilename(builder, filename): builder.PrependUOffsetTRelativeSlot(8, flatbuffers.number_types.UOffsetTFlags.py_type(filename), 0)
 def RunStartAddNPeriods(builder, nPeriods): builder.PrependUint32Slot(9, nPeriods, 1)
 def RunStartAddDetectorSpectrumMap(builder, detectorSpectrumMap): builder.PrependUOffsetTRelativeSlot(10, flatbuffers.number_types.UOffsetTFlags.py_type(detectorSpectrumMap), 0)
+def RunStartAddMetadata(builder, metadata): builder.PrependUOffsetTRelativeSlot(11, flatbuffers.number_types.UOffsetTFlags.py_type(metadata), 0)
 def RunStartEnd(builder): return builder.EndObject()

@@ -140,10 +140,10 @@ class StateProcessor(object):
             self.cmd_builder = None
             clist = []
 
-        # dump xml for debugging
-        # ofile = './test/data/gumxml_latest.xml'
-        # with open(ofile, 'w') as f:
-        #     f.write(resp['reply'])
+        #dump xml for debugging
+        ofile = './test/data/gumxml_latest.xml'
+        with open(ofile, 'w') as f:
+            f.write(resp['reply'])
 
         return clist
 
