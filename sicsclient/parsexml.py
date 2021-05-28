@@ -4,9 +4,9 @@ import os
 import xmltodict
 
 from collections import namedtuple, OrderedDict
-from sicsclient.helpers import get_module_logger
+from sicsclient.helpers import setup_module_logger
 
-logger = get_module_logger(__name__)
+logger = setup_module_logger("sk.parsexml")
 
 Component = namedtuple(
     'Component', ['tag', 'value', 'dtype', 'klass', 'mutable', 'nxalias', 'units', 'nxsave'])
@@ -93,6 +93,9 @@ def parse(clist, tag, nodes, folder):
 
 
 def parsesics(xmlstr):
+
+    if not xmlstr:
+        return []
 
     doc = xmltodict.parse(xmlstr)
 

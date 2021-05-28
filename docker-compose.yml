@@ -6,5 +6,5 @@ services:
     network_mode: host
     volumes:
       - /opt/ansto/sics-to-kafka/config:/config
-    command: ["python", "sicsclient/client.py", "--base=/config/pln_base.json"]
+    command: ["python", "launcher.py", "--base=/config/pln_base.json", "--loglevel=DEBUG"]
 

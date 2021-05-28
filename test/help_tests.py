@@ -1,26 +1,20 @@
 
+import flatbuffers
 import json
 import time
 
-from sicsclient.pyschema.JsonData import JsonData
-from sicsclient.pyschema.LogData import LogData
-from sicsclient.pyschema.Int import Int
-from sicsclient.pyschema.Double import Double
-from sicsclient.pyschema.String import String
-from sicsclient.pyschema.Value import Value
+from streaming_data_types.status_x5f2 import Status
+from streaming_data_types.logdata_f142 import (
+    LogData, Int, Double, String, Value)
 
 from sicsclient.cmdbuilder import CommandBuilder
 from sicsclient.kafkahelp import (KafkaProducer, timestamp_to_msecs,
                                   create_runstart_message, publish_message)
 
-def extract_json_data(msg):
-    jmsg = JsonData.GetRootAsJsonData(bytearray(msg.value), 0)
-    jstr = jmsg.Json().decode('utf-8')
-    return json.loads(jstr)
 
 def extract_f142_data(msg):
 
-    log = LogData.GetRootAsLogData(bytearray(msg.value), 0)
+    log = LogData.LogData.GetRootAsLogData(bytearray(msg.value), 0)
 
     response = {}
     response['name'] = log.SourceName().decode('utf-8')
@@ -43,18 +37,6 @@ def extract_f142_data(msg):
     return response
 
 
-Handlers = {'f142': extract_f142_data,
-            'json': extract_json_data}
-
-
-def extract_data(msg):
-
-    mid = msg.value[4:8].decode('utf-8')
-    try:
-        return Handlers[mid](msg)
-    except KeyError:
-        return {}
-
 def send_write_command(filename):
     timestamp_ms = timestamp_to_msecs(time.time())
     producer = KafkaProducer(bootstrap_servers=['localhost:9092'])
@@ -62,3 +44,26 @@ def send_write_command(filename):
     cbld = CommandBuilder(filename)
     msg = create_runstart_message(cbld.get_command())
     publish_message(producer, topic, timestamp_ms, msg)
+
+
+def create_x5f2_status(json_content):
+    file_identifier = b"x5f2"
+    builder = flatbuffers.Builder(1024)
+    software_str = builder.CreateString("UnitTest")
+    version_str = builder.CreateString("1.0")
+    service_str = builder.CreateString("Mocked")
+    host_str = builder.CreateString("localhost")
+    json_str = builder.CreateString(json.dumps(json_content).encode('utf-8'))
+    Status.StatusStart(builder)
+    Status.StatusAddServiceId(builder, software_str)
+    Status.StatusAddSoftwareVersion(builder, version_str)
+    Status.StatusAddServiceId(builder, service_str)
+    Status.StatusAddHostName(builder, host_str)
+    Status.StatusAddStatusJson(builder, json_str)
+    msg = Status.StatusEnd(builder)
+    builder.Finish(msg)
+
+    # Generate the output and replace the file_identifier
+    buff = builder.Output()
+    buff[4:8] = file_identifier
+    return bytes(buff)

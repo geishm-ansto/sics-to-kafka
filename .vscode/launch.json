@@ -15,9 +15,9 @@
             "name": "SICS-Kafka",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/sicsclient/client.py",
+            "program": "${workspaceFolder}/launcher.py",
             "args": [
-                "--topic", "sics-stream",
+                "--stream", "sics-stream",
                 "--base", "${workspaceFolder}/config/pln_base.json",
                 "--loglevel", "DEBUG"
             ],

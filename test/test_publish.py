@@ -11,16 +11,15 @@ import json
 import unittest
 import threading
 
-from sicsclient.client import sics_client
+from sicsclient.forwarder import Forwarder
+from sicsclient.forwarder import Forwarder
 from sicsclient.state import StateProcessor
-from sicsclient.units import UnitManager
-from kafka import KafkaConsumer
+from sicsclient.writerstatus import WriterStatus
 
-from sicsclient.pyschema.Int import Int
-from sicsclient.pyschema.Double import Double
-from sicsclient.pyschema.String import String
-from sicsclient.pyschema.LogData import LogData
-from sicsclient.pyschema.Value import Value
+from test.help_tests import extract_f142_data
+from kafka import KafkaConsumer
+# from streaming_data_types.logdata_f142 import (
+#     LogData, Int, Double, String, Value)
 
 Msgs = [
     b'{ "type": "Value", "name": "instrument\\/detector\\/detector_x\\/ignorefault", "value": 0, "seq": 572, "ts": 1585519280.073885 }',
@@ -38,6 +37,7 @@ Msgs = [
     b'{ "type": "Value", "name": "instrument\\/parameters\\/BSdiam", "value": 12.5, "seq": 584, "ts": 1585519281.057651 }',
 ]
 
+
 class Publisher:
 
     def __init__(self, port):
@@ -48,10 +48,9 @@ class Publisher:
         '''
         On a failure it will close the zmq socket it will clean up and pause
         '''
-        if self.zsock:
-            self.zsock.setsockopt(zmq.LINGER, 0)
-            self.zsock.close()
-        self.zsock = None
+        if self.zcontext:
+            self.zcontext.destroy(linger=0)
+        self.zsock = self.zcontext = None
         time.sleep(1)
 
     def open_connection(self):
@@ -59,8 +58,8 @@ class Publisher:
         Create a new socket connection and register for polling
         '''
         # open the ZeroMQ message
-        context = zmq.Context()
-        self.zsock = context.socket(zmq.PUB)
+        self.zcontext = zmq.Context()
+        self.zsock = self.zcontext.socket(zmq.PUB)
         address = "tcp://*:{:d}".format(self.port)
         self.zsock.bind(address)
         time.sleep(1)
@@ -75,32 +74,8 @@ class Publisher:
             print(msg.decode('utf-8'))
 
 
-def extract_f142_data(msg):
-
-    log = LogData.GetRootAsLogData(bytearray(msg.value), 0)
-
-    response = {}
-    response['name'] = log.SourceName().decode('utf-8')
-    response['ts'] = log.Timestamp() / 1.0e9    # convert to seconds
-
-    value_type = log.ValueType()
-    if value_type == Value.Int:
-        _val = Int()
-        _val.Init(log.Value().Bytes, log.Value().Pos)
-        response['value'] = _val.Value()
-    elif value_type == Value.Double:
-        _val = Double()
-        _val.Init(log.Value().Bytes, log.Value().Pos)
-        response['value'] = _val.Value()
-    elif value_type == Value.String:
-        _val = String()
-        _val.Init(log.Value().Bytes, log.Value().Pos)
-        response['value'] = _val.Value().decode('utf-8')
-
-    return response
-
-
 Handlers = {'f142': extract_f142_data}
+
 
 def extract_data(msg):
 
@@ -124,18 +99,21 @@ class TestForwarding(unittest.TestCase):
         cls.topic = 'TEST-sics'
         cls.xport = 5555
         cls.base_file = './config/pln_base.json'
-        cls.unit_manager = UnitManager(cls.broker)
+        cls.writer_status = WriterStatus(cls.broker, 'TEST_writerStatus')
         cls.state_processor = StateProcessor(
-        cls.sics_url, cls.xport, cls.base_file, cls.unit_manager, kafka_broker=cls.broker, stream_topic=cls.topic)
-        cls.sics = threading.Thread(target=sics_client, args=(
-            cls.sics_url, cls.port, cls.state_processor, cls.unit_manager, cls.broker, cls.topic), daemon=True)
+            cls.sics_url, cls.xport, cls.base_file, cls.writer_status, kafka_broker=cls.broker, stream_topic=cls.topic, timeout_secs=1000)
+        forwarder = Forwarder(cls.sics_url, cls.port, cls.state_processor, cls.broker, cls.topic)
+        cls.sics = threading.Thread(target=forwarder.run, args=(), daemon=True)
         cls.sics.start()
 
     def confirm_messages(self, consumer):
-        # confirm all the messages are recovered from kafka
+        # confirm all the messages are recovered from kafka but ignore
+        # status messages that may be interleaved in the kafka stream
         ix = 0
         for msg in consumer:
             rsp = extract_data(msg)
+            if rsp['name'] == 'Status':
+                continue
             ref = json.loads(Msgs[ix].decode('utf-8'))
             self.assertAlmostEqual(rsp['ts'], ref['ts'], 7)
             self.assertEqual(rsp['name'], ref['name'])
@@ -166,6 +144,7 @@ class TestForwarding(unittest.TestCase):
         sender.start()
 
         # confirm all the messages are recovered from kafka
+        # time.sleep(1000)
         self.confirm_messages(consumer)
 
     def test_zmq_recovery(self):

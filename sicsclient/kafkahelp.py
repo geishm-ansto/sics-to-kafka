@@ -2,18 +2,17 @@ import flatbuffers
 import json
 from kafka import KafkaProducer
 
-import sicsclient.pyschema.JsonData as JsonData
-import sicsclient.pyschema.LogData as LogData
-import sicsclient.pyschema.RunStart as RunStart
+from streaming_data_types.logdata_f142 import (
+    LogData, IntStart, IntAddValue,
+    IntEnd, DoubleStart, DoubleAddValue, DoubleEnd,
+    StringStart, StringAddValue, StringEnd, Value)
+from streaming_data_types.run_start_pl72 import RunStart
+from streaming_data_types.run_stop_6s4t import RunStop
 
-from sicsclient.pyschema.Value import Value
-from sicsclient.pyschema.Int import IntStart, IntAddValue, IntEnd
-from sicsclient.pyschema.Double import DoubleStart, DoubleAddValue, DoubleEnd
-from sicsclient.pyschema.String import StringStart, StringAddValue, StringEnd
+from sicsclient.helpers import setup_module_logger
 
-from sicsclient.helpers import get_module_logger
+logger = setup_module_logger(__name__)
 
-logger = get_module_logger(__name__)
 
 def timestamp_to_nsecs(ts):
     return int(ts * 1e9)
@@ -69,7 +68,8 @@ class KafkaLogger(object):
         try:
             (posn, val_type) = MapValue[type(value)](builder, value)
         except (KeyError):
-            logger.warning('No suitable builder for type {}'.format(type(value)))
+            logger.warning(
+                'No suitable builder for type {}'.format(type(value)))
             return None
 
         # Build the actual buffer
@@ -97,30 +97,6 @@ class KafkaLogger(object):
                 topic, msg, timestamp_ms=timestamp_to_msecs(timestamp))
             self.producer.flush()
 
-    def create_json_message(self, jstr):
-        file_identifier = b"json"
-        builder = flatbuffers.Builder(1024)
-        body = builder.CreateString(jstr)    
-        JsonData.JsonDataStart(builder)
-        JsonData.JsonDataAddJson(builder, body)
-        msg = JsonData.JsonDataEnd(builder)
-        builder.Finish(msg)  
-
-        # Generate the output and replace the file_identifier
-        buff = builder.Output()
-        buff[4:8] = file_identifier
-        return bytes(buff)
-
-    def publish_json_message(self, topic, timestamp, jstr):
-        """
-        Publish a json message to a given topic.
-        """
-        msg = self.create_json_message(jstr)
-        if msg:
-            # send and flush so that messages are not batched
-            self.producer.send(
-                topic, msg, timestamp_ms=timestamp_to_msecs(timestamp))
-            self.producer.flush()
 
 def create_runstart_message(cmdargs):
     """
@@ -130,9 +106,10 @@ def create_runstart_message(cmdargs):
         try:
             insertfn(builder, cmdargs[tag])
         except KeyError:
-            logger.warning('No suitable command value for {}'.format(tag))        
+            logger.warning('No suitable command value for {}'.format(tag))
 
     map_strings = []
+
     def insert_string(insertfn, tag, asjson=False):
         try:
             if asjson:
@@ -142,7 +119,7 @@ def create_runstart_message(cmdargs):
             body = builder.CreateString(jstr)
             map_strings.append((insertfn, body))
         except KeyError:
-            logger.warning('No suitable command value for {}'.format(tag))       
+            logger.warning('No suitable command value for {}'.format(tag))
 
     file_identifier = b"pl72"
     builder = flatbuffers.Builder(1024)
@@ -151,20 +128,38 @@ def create_runstart_message(cmdargs):
     insert_string(RunStart.RunStartAddJobId, 'job_id')
     insert_string(RunStart.RunStartAddFilename, 'file_name')
     insert_string(RunStart.RunStartAddServiceId, 'service_id')
-    insert_string(RunStart.RunStartAddNexusStructure, 'nexus_structure', asjson=True)
+    insert_string(RunStart.RunStartAddNexusStructure,
+                  'nexus_structure', asjson=True)
 
-    RunStart.RunStartStart(builder)    
+    RunStart.RunStartStart(builder)
     insert_value(RunStart.RunStartAddStartTime, 'start_time')
-    insert_value(RunStart.RunStartAddStopTime, 'stop_time')    
+    insert_value(RunStart.RunStartAddStopTime, 'stop_time')
     for ifn, body in map_strings:
         ifn(builder, body)
     msg = RunStart.RunStartEnd(builder)
-    builder.Finish(msg)  
+    builder.Finish(msg)
 
     # Generate the output and replace the file_identifier
     buff = builder.Output()
     buff[4:8] = file_identifier
     return bytes(buff)
+
+
+def create_runend_message(stop_time, job_id):
+    file_identifier = b"6s4t"
+    builder = flatbuffers.Builder(1024)
+    job_id_str = builder.CreateString(job_id)
+    RunStop.RunStopStart(builder)
+    RunStop.RunStopAddJobId(builder, job_id_str)
+    RunStop.RunStopAddStopTime(builder, stop_time)
+    msg = RunStop.RunStopEnd(builder)
+    builder.Finish(msg)
+
+    # Generate the output and replace the file_identifier
+    buff = builder.Output()
+    buff[4:8] = file_identifier
+    return bytes(buff)
+
 
 def extract_runstart_data(buffer):
 
@@ -180,19 +175,32 @@ def extract_runstart_data(buffer):
     response['nexus_structure'] = log.NexusStructure()
     return response
 
+
+def extract_runstop_data(buffer):
+
+    log = RunStop.RunStop.GetRootAsRunStop(buffer, 0)
+
+    response = {}
+    response['stop_time'] = log.StopTime()
+    response['job_id'] = log.JobId()
+    response['service_id'] = log.ServiceId()
+    return response
+
+
 def publish_message(producer, topic, timestamp_msec, msg):
     """
     Send and flush the message to a given topic.
     """
     # send and flush so that messages are not batched
     producer.send(
-        topic, msg, timestamp_ms=timestamp_msec)
+        topic, value=msg, timestamp_ms=timestamp_msec)
     producer.flush()
+
 
 def get_kafka_tag_value(sics_msg):
     msg_type = sics_msg['type'].lower()
     if msg_type == 'value':
-        # drop the leading '/' 
+        # drop the leading '/'
         if sics_msg['name'][0] == '/':
             tag = sics_msg['name'][1:]
         else:

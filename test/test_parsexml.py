@@ -27,7 +27,7 @@ class TestXMLParser(unittest.TestCase):
             'control/T1S4',
             'control/T1SP1',
             'control/T1SP2',
-            #'experiment/gumtree_status',
+            'experiment/file_name'
             #'experiment/gumtree_time_estimate'
         ]
         with open(testfile, 'r') as fd:

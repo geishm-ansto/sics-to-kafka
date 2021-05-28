@@ -6,4 +6,4 @@ confluent-kafka
 kafka-python
 pyzmq
 xmltodict
-
+ess-streaming-data-types

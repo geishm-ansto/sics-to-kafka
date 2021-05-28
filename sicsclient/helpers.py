@@ -6,23 +6,30 @@
 
 import json
 import h5py
-import uuid
 import logging
-from datetime import datetime, timedelta
-from collections.abc import Iterable
+from datetime import datetime
 
-def get_module_logger(mod_name):
+
+def setup_module_logger(mod_name, log_level=None):
     """
-    To use this, do logger = get_module_logger(__name__)
+    To use this, do logger = setup_module_logger(__name__)
     """
     logger = logging.getLogger(mod_name)
-    handler = logging.StreamHandler()
-    formatter = logging.Formatter(
-        '%(asctime)s [%(name)-12s] %(levelname)-8s %(message)s')
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-    logger.propagate = False
+    if not logger.hasHandlers():
+        handler = logging.StreamHandler()
+        formatter = logging.Formatter(
+            '%(asctime)s [%(name)-12s] %(levelname)-8s %(message)s')
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        logger.propagate = False
+
     return logger
+
+
+def setup_logger_level(mod_name, numeric_level):
+    logger = logging.getLogger(mod_name)
+    logger.setLevel(numeric_level)
+
 
 def unix_time_milliseconds(dt):
     epoch = datetime.utcfromtimestamp(0)

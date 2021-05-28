@@ -12,15 +12,16 @@ import json
 import uuid
 
 from datetime import datetime
-from queue import Queue
+from queue import Queue, Empty
 from sicsclient.parsexml import parsesics, Component
 from sicsclient.cmdbuilder import CommandBuilder
 from sicsclient.kafkahelp import (KafkaProducer, timestamp_to_msecs,
-                                  create_runstart_message, publish_message)
-from sicsclient.units import Parameter
-from sicsclient.helpers import get_module_logger
+                                  create_runstart_message, create_runend_message,
+                                  publish_message)
+from sicsclient.helpers import setup_module_logger
 
-logger = get_module_logger(__name__)
+logger = setup_module_logger("sk.state")
+
 
 def find_nodes(clist, tag):
     '''
@@ -41,34 +42,35 @@ class StateProcessor(object):
     the execution there is no need for a lock to protect the data.
     """
 
-    def __init__(self, sics, port, basefile, unit_manager, kafka_broker='localhost:9092', recv_wait=1000, ident='kafka',
-                 stream_topic='sics-stream', writer_topic='TEST_writerCommand'):
+    def __init__(self, sics, port, basefile, writer_status, kafka_broker='localhost:9092', recv_wait=1000, ident='sics-kafka',
+                 stream_topic='sics-stream', writer_topic='TEST_writerCommand', timeout_secs=30):
 
-        self.cmd_builder = None
-        self.basefile = basefile
-        self.unit_manager = unit_manager
-        self.stream_topic = stream_topic
-        self.writer_topic = writer_topic
-        self.kafka_producer = KafkaProducer(bootstrap_servers=[kafka_broker])
-        self.event_queue = Queue()
-        self.recv_wait = recv_wait
-        self.end_point = 'tcp://{}:{}'.format(sics, port)
-        self.transactions = 0
-        self.ident = ident
+        self._basefile = basefile
+        self._writer_status = writer_status
+        self._stream_topic = stream_topic
+        self._writer_topic = writer_topic
+        self._kafka_producer = KafkaProducer(bootstrap_servers=kafka_broker)
+        self._event_queue = Queue()
+        self._recv_wait = recv_wait
+        self._end_point = 'tcp://{}:{}'.format(sics, port)
+        self._transactions = 0
+        self._timeout_secs = timeout_secs
+        self._ident = ident
+        self._job_id = None
 
         # create the thread that will rebuild the units
-        self.thread = threading.Thread(target=self.process_events, daemon=True)
-        self.thread.start()
+        self._zcontext = self._zpoller = self._zsock = None
+        thread = threading.Thread(target=self.process_events, daemon=True)
+        thread.start()
 
-    def zmq_failure(self):
+    def on_zmq_failure(self):
         '''
         On a failure it will close the zmq socket it will clean up and pause
         '''
-        if self.zsock:
-            self.zpoller.unregister(self.zsock)
-            self.zsock.setsockopt(zmq.LINGER, 0)
-            self.zsock.close()
-        self.zsock = None
+        if self._zcontext:
+            self._zpoller.unregister(self._zsock)
+            self._zcontext.destroy(linger=0)
+            self._zcontext = self._zpoller = self._zsock = None
         time.sleep(1)
 
     def open_connection(self):
@@ -76,26 +78,28 @@ class StateProcessor(object):
         Create a new socket connection and register for polling
         '''
         # open the ZeroMQ message
-        self.zsock = self.zcontext.socket(zmq.DEALER)
-        self.zsock.setsockopt(zmq.IDENTITY, self.ident.encode('utf-8'))
-        self.zsock.setsockopt(zmq.RCVTIMEO, self.recv_wait)
-        self.zsock.connect(self.end_point.encode('utf-8'))
-        self.zpoller.register(self.zsock, zmq.POLLIN)
+        self._zcontext = zmq.Context()
+        self._zsock = self._zcontext.socket(zmq.DEALER)
+        self._zsock.setsockopt(zmq.IDENTITY, self._ident.encode('utf-8'))
+        self._zsock.setsockopt(zmq.RCVTIMEO, self._recv_wait)
+        self._zsock.connect(self._end_point.encode('utf-8'))
+        self._zpoller = zmq.Poller()
+        self._zpoller.register(self._zsock, zmq.POLLIN)
         time.sleep(1)
 
         # test connection by checking status
         resp = self.cmd_request('SICS', 'status')
         if resp and resp['flag'].lower() == 'ok':
             logger.info('zmq.DEALER {} connection to {} OK'.format(
-                self.ident, self.end_point))
+                self._ident, self._end_point))
             return True
         else:
             logger.warning('zmq.DEALER {} connection to {} FAILED'.format(
-                self.ident, self.end_point))
-            self.zmq_failure()
+                self._ident, self._end_point))
+            self.on_zmq_failure()
             return False
 
-    def add_hdf_component(self, cmp, stream_source=None):
+    def add_hdf_component(self, cmd_builder, cmp, stream_source=None):
         '''
         Add each component to the command builderProcess each component where:
         . 'f142' type {txt,int,flt}, mutable
@@ -116,14 +120,14 @@ class StateProcessor(object):
             dtype_ = cmp.dtype
         if cmp.mutable:
             atts = [('units', cmp.units)] if cmp.units else []
-            source = stream_source if stream_source else cmp.tag            
-            self.cmd_builder.add_stream(
-                # uses the simple stream 's142' rather than 'f142' which includes alarm
-                # status information from nicos or epics
-                cmp.tag, self.stream_topic, source, 's142', dtype_, cmp.value, atts)
+            source = stream_source if stream_source else cmp.tag
+            # uses the simple stream 's142' rather than 'f142' which includes alarm
+            # status information from nicos or epics
+            cmd_builder.add_stream(
+                cmp.tag, self._stream_topic, source, 's142', dtype_, cmp.value, atts)
         else:
             atts = [('units', cmp.units)] if cmp.units else []
-            self.cmd_builder.add_dataset(cmp.tag, cmp.value, dtype_, atts)
+            cmd_builder.add_dataset(cmp.tag, cmp.value, dtype_, atts)
 
     def get_xml_parameters(self):
         '''
@@ -136,11 +140,10 @@ class StateProcessor(object):
         if resp and resp['flag'].lower() == 'ok':
             clist = parsesics(resp['reply'])
         else:
-            logger.warning('Unable to recover gumtreexml')
-            self.cmd_builder = None
+            logger.error('Unable to recover xml parameters from SICS')
             clist = []
 
-        #dump xml for debugging
+        # TODO remove dump xml for development
         ofile = './test/data/gumxml_latest.xml'
         with open(ofile, 'w') as f:
             f.write(resp['reply'])
@@ -150,148 +153,161 @@ class StateProcessor(object):
     def start_scan(self, scan_ts_secs):
         '''
         A histmem scan was STARTED:
-        . Check if previous command was not completed and log message.
         . Get the kafkaxml structure and parse
         . Build the cmd structure
-        . Notify the unit manager of the component list
+        . Cancel any active job 
+        . Send the command (with stop set to 0)
         '''
         try:
-            # if a start scan was initiated then raise an alert
-            if self.cmd_builder:
-                logger.info(
-                    'Ignoring previous start scan that was not completed!')
-            self.cmd_builder = None
-
             # get the component list form the xml description
             # and recover the key parameters
-            # TODO the start and stop time should come from the xml parameters
-            #       but the simulator has a completely wrong time that messes
-            #       up the processing stop times in the writer.
-            #       Use the start_scan timestap as the actual start of the recording
-            # 
             clist = self.get_xml_parameters()
-            starts = []  # find_nodes(clist, 'start_time')
-            start_time = starts[0].value if starts else scan_ts_secs
-            start_time_ms = timestamp_to_msecs(start_time)
-            stops = []  # find_nodes(clist, 'stop_time')
-            stop_time_ms = timestamp_to_msecs(
-                stops[0].value) if stops else None
             fnames = find_nodes(clist, 'file_name')
             if fnames:
                 basename = os.path.basename(fnames[0].value)
                 ss = basename.split('.')
                 file_name = ss[0] + '.nxs'
             else:
-                logger.warning('Need file name to complete write request')
+                logger.error('Need file name to complete write request')
                 return
 
             # load the default command string for the instrument
-            self.cmd_builder = CommandBuilder(self.basefile)
-            self.cmd_builder.set_param(
+            start_time = scan_ts_secs
+            start_time_ms = timestamp_to_msecs(start_time)
+            self._job_id = str(uuid.uuid4())
+            cmd_builder = CommandBuilder(self._basefile)
+            cmd_builder.set_param(
                 filename=file_name, start_time_ms=start_time_ms,
-                stop_time_ms=stop_time_ms, job_id=str(uuid.uuid4()))
+                stop_time_ms=0, job_id=self._job_id)
+
+            # add the mutable nodes from the xml description
+            for cmp in clist:
+                self.add_hdf_component(cmd_builder, cmp)
 
             # specific parameters not recovered from xml dump
             # /entry/start_time, ../end_time  | stream : string
-            # /entry/run_mode                 | stream : string  
+            # /entry/run_mode                 | stream : string
             # /entry/experiment_identifier    | NA
             # /entry/time_stamp               | stream : int
             # /entry/program_name             | NA
             # /entry/program_revision         | NA
             # /entry/data ... folder /w links | build explicitly
-            iso_start = datetime.fromtimestamp(start_time).isoformat(' ', 'seconds')
+            iso_start = datetime.fromtimestamp(
+                start_time).isoformat(' ', 'seconds')
             addnl_cmps = [
-                (Component("program_name", 'SICS-ESS', 'text', '', False, '', '', True), None),
-                (Component("program_revision", 'NA', 'text', '', False, '', '', True), None),
-                (Component("start_time", iso_start, 'text', '', False, '', '', True), None),
-                (Component("run_mode", None, 'text', '', True, '', '', True), "entry/run_mode"),
-                (Component("time_stamp", None, 'int', '', True, '', '', True), "entry/time_stamp")
+                (Component("program_name", 'SICS-ESS',
+                 'text', '', False, '', '', True), None),
+                (Component("program_revision", 'NA',
+                 'text', '', False, '', '', True), None),
+                (Component("start_time", iso_start,
+                 'text', '', False, '', '', True), None),
+                (Component("run_mode", None, 'text', '',
+                 True, '', '', True), "entry/run_mode"),
+                (Component("time_stamp", None, 'int', '',
+                 True, '', '', True), "entry/time_stamp")
             ]
             for cmp, src in addnl_cmps:
-                self.add_hdf_component(cmp, src)
+                self.add_hdf_component(cmd_builder, cmp, src)
 
-            # finally add the hdf nodes from the component list ad forward the component list
-            # to the unit manager
-            unit_values = {}
-            for cmp in clist:
-                self.add_hdf_component(cmp)
-                unit_values[cmp.tag] = Parameter(cmp.value, cmp.units)
-            self.unit_manager.set_unit_values(start_time, unit_values)
+            # TODO debugging code - remove
+            ofile = './test/data/temp.json'
+            cmd_builder.save(ofile)
 
-            # command builder may only require the stop time to be updated
+            # finally get the command to be send to the writer
+            write_command = cmd_builder.get_command()
+
+            # before sending the write command cancel any active job with the
+            # writer because it only supports a sequential write process
+            if not self.cancel_active_job():
+                logger.error(
+                    'Timed out cancelling the active nexus writer job')
+
+            # send to the writer command topic
+            # For now just issue a write command and forget, if we need a status
+            # then the command builder or the job id may need to managed until
+            # the write is confirmed. Just delete until more is needed.
+            self.send_start_cmd(timestamp_to_msecs(
+                scan_ts_secs), write_command)
+            logger.info(f'Start nexus writer, file: {file_name} job id: {self._job_id}')
+
         except Exception as e:
             logger.error(str(e))
 
     def end_scan(self, finish_ts_secs):
         '''
-        Expects to be invoked after a start_scan which setups the 
-        command builder. 
-        If the stop time is not present it will update with the passed
-        timestop as the stop time.
-        Finally it issues a write request.
+        Stop a currently executing job id by sending a stop message and
+        then clear the job id.
         '''
-        if not self.cmd_builder:
-            logger.warning('Missing start scan event - do nothing!')
-            return
+        if self._job_id:
+            self.send_stop_cmd(timestamp_to_msecs(
+                finish_ts_secs), self._job_id)
+            logger.info('Stop nexus writer, job id: {}'.format(self._job_id))
+            self._job_id = None
+        else:
+            logger.warning('Missing job id, may have timed out, do nothing!')
 
-        # for now only add the end time
-        iso_end = datetime.fromtimestamp(finish_ts_secs).isoformat(' ', 'seconds')
-        addnl_cmps = [
-            (Component("end_time", iso_end, 'text', '', False, '', '', True), None)
-        ]
-        for cmp, src in addnl_cmps:
-            self.add_hdf_component(cmp)
+    def handle_idle_event(self):
+        '''
+        If there is an active job that has not been closed then issue the stop event.
+        Note that this call is in the same thread as starting and stopping scans so it 
+        does not to lock the job_id.
+        '''
+        if self._job_id:
+            self.send_stop_cmd(1, self._job_id)
+            logger.info('Stop nexus writer, job id: {}'.format(self._job_id))
+            self._job_id = None
 
-        # if the stop time was not specified then set it
-        if not self.cmd_builder.get_stop_time():
-            self.cmd_builder.set_param(
-                stop_time_ms=timestamp_to_msecs(finish_ts_secs))
+    def cancel_active_job(self):
+        active_job = self._writer_status.get_active_job()
+        if active_job:
+            self.send_stop_cmd(1, active_job)
+            logger.info('Aborting nexus writer, job id: {}'.format(active_job))
+        return self._writer_status.wait_for_idle(self._timeout_secs)
 
-        # debugging code - remove
-        ofile = './test/data/temp.json'
-        self.cmd_builder.save(ofile)
+    def send_start_cmd(self, timestamp_ms, params):
+        msg = create_runstart_message(params)
+        publish_message(self._kafka_producer,
+                        self._writer_topic, timestamp_ms, msg)
 
-        # send to the writer command topic
-        self.send_write_cmd(timestamp_to_msecs(finish_ts_secs))
-
-        # For now just issue a write command and forget, if we need a status
-        # then the command builder or the job id may need to managed until
-        # the write is confirmed. Just delete until more is needed.
-        logger.info('Issued write request to the nexus writer topic')
-        self.cmd_builder = None
-
-    def send_write_cmd(self, timestamp_ms):
-        msg = create_runstart_message(self.cmd_builder.get_command())
-        publish_message(self.kafka_producer, self.writer_topic, timestamp_ms, msg)
+    def send_stop_cmd(self, timestamp_ms, job_id):
+        msg = create_runend_message(timestamp_ms, job_id)
+        publish_message(self._kafka_producer,
+                        self._writer_topic, timestamp_ms, msg)
 
     def cmd_request(self, cmd, text):
 
-        if not self.zsock and not self.open_connection():
+        if not self._zsock and not self.open_connection():
             return {}
 
-        self.transactions += 1
+        self._transactions += 1
         request = {
-            'trans': self.transactions,
+            'trans': self._transactions,
             'cmd': cmd,
             'text': text
         }
         msg = json.dumps(request).encode('utf-8')
+        response = {}
         try:
-            self.zsock.send(msg)
+            self._zsock.send(msg, zmq.NOBLOCK)
             while True:
-                message = self.zsock.recv().decode('utf-8')
-                if message.startswith("{"):
-                    response = json.loads(message)
+                resp = self._zpoller.poll(self._timeout_secs * 1000)
+                if resp:
+                    message = self._zsock.recv().decode('utf-8')
+                    if message.startswith("{"):
+                        response = json.loads(message)
+                    else:
+                        response = {'reply': "Nothing"}
+                    if 'final' in response and response['final']:
+                        return response
                 else:
-                    response = {'reply': "Nothing"}
-                if 'final' in response and response['final']:
-                    return response
+                    raise ValueError('dealer timeout error')
+
         except Exception as exc:
             # There is a significant risk of a dead lock with the ZMQ client server model
             # so after printing the message re-establish the connection
             logger.error('ZeroMQ: {}'.format(str(exc)))
-            self.zmq_failure()
-        return {}
+            self.on_zmq_failure()
+        return response
 
     def process_events(self):
         '''
@@ -303,29 +319,53 @@ class StateProcessor(object):
           with parameters that need to be saved
         . on FINISH hmscan update the stop time and issue the write command
         '''
-        self.zsock = None
-        self.zcontext = zmq.Context()
-        self.zpoller = zmq.Poller()
         self.open_connection()
 
         while True:
-            # get the message from the queue
-            resp = self.event_queue.get()
-            if resp is None:
-                continue
+            try:
+                # get the message from the queue - if it times out after N sec
+                # check the sics status
+                resp = self._event_queue.get(timeout=self._timeout_secs)
+                if resp is None:
+                    continue
 
-            # do something useful
-            logger.info('{:.3f} {} {}'.format(
-                resp["ts"], resp["name"], resp["value"]))
-            if resp["type"] == "State" and resp["name"] == "STARTED" and resp["value"] == "hmscan":
-                self.start_scan(resp["ts"])
-            elif resp["type"] == "State" and resp["name"] == "FINISH" and resp["value"] == "hmscan":
-                self.end_scan(resp["ts"])
-            self.event_queue.task_done()
+                # do something useful
+                logger.info('{:.3f} {} {}'.format(
+                    resp["ts"], resp["name"], resp["value"]))
+                if resp["type"] == "State" and resp["name"] == "STARTED" and resp["value"] == "hmscan":
+                    self.start_scan(resp["ts"])
+                elif resp["type"] == "State" and resp["name"] == "FINISH" and resp["value"] == "hmscan":
+                    self.end_scan(resp["ts"])
+                elif resp["type"] == "Status" and resp["name"] == "Status" and \
+                        ('UNDEFINED' in resp['value'] or "Eager to execute" in resp["value"]):
+                    self.handle_idle_event()
+                self._event_queue.task_done()
+            except Empty:
+                self.sics_monitor()
 
     def wait_for_processed(self):
         # blocks until the queue is empty
-        self.event_queue.join()
+        self._event_queue.join()
 
     def add_event(self, event):
-        self.event_queue.put(event)
+        self._event_queue.put(event)
+
+    def sics_monitor(self):
+        resp = self.cmd_request('SICS', 'status')
+        start_time = time.time()
+        evt = {'ts': start_time,
+               'type': 'Status',
+               'name': 'Status'}
+        if not resp:
+            evt['value'] = 'UNDEFINED: SICS router timeout'
+        else:
+            evt['value'] = resp['reply']
+        self.add_event(evt)
+
+    @property
+    def zmq_socket(self):
+        return self._zsock
+
+    @property
+    def kafka_producer(self):
+        return self._kafka_producer

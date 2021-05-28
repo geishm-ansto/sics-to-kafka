@@ -8,8 +8,8 @@ import flatbuffers
 
 from sicsclient.kafkahelp import (KafkaProducer, timestamp_to_msecs,
                                   create_runstart_message, publish_message)
-import sicsclient.pyschema.RunStart as RunStart
-import sicsclient.pyschema.RunStop as RunStop
+from streaming_data_types.run_start_pl72 import RunStart
+from streaming_data_types.run_stop_6s4t import RunStop
 
 
 def send_start_command(broker, topic, run_name, instrument):
@@ -18,14 +18,15 @@ def send_start_command(broker, topic, run_name, instrument):
 
     file_identifier = b"pl72"
     builder = flatbuffers.Builder(1024)
-    builder.ForceDefaults(True) # only diff with ESS 
+    builder.ForceDefaults(True)  # only diff with ESS
     run_name_ = builder.CreateString(run_name)
     instrument_ = builder.CreateString(instrument)
     nexus_struct_ = builder.CreateString("")
     RunStart.RunStartStart(builder)
     RunStart.RunStartAddRunName(builder, run_name_)
     RunStart.RunStartAddInstrumentName(builder, instrument_)
-    RunStart.RunStartAddNexusStructure(builder, nexus_struct_)  # added because expecting 
+    RunStart.RunStartAddNexusStructure(
+        builder, nexus_struct_)  # added because expecting
     RunStart.RunStartAddStartTime(
         builder, timestamp_ms * 1000000)  # msec to nsec
     msg = RunStart.RunStartEnd(builder)

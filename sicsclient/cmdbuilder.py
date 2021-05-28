@@ -59,10 +59,10 @@ class CommandBuilder(object):
     def set_param(self, filename=None, start_time_ms=None, stop_time_ms=None, root=None, broker=None, job_id=None):
         if filename:
             self.command["file_name"] = filename
-        if start_time_ms:
+        if start_time_ms is not None:
             # passed in as unix time in ms
             self.command["start_time"] = int(start_time_ms)
-        if stop_time_ms:
+        if stop_time_ms is not None:
             # passed in as unix time in ms
             self.command["stop_time"] = int(stop_time_ms)
         if root:
