@@ -1,8 +1,7 @@
 import json
 import uuid
 import numpy as np
-from datetime import datetime, timedelta
-from collections.abc import Iterable
+from datetime import datetime
 from sicsclient.helpers import unix_time_milliseconds
 
 
@@ -34,7 +33,7 @@ class CommandBuilder(object):
             "service_id": "filewriter1",
             "abort_on_uninitialised_stream": False,
             "use_hdf_swmr": True,
-            "file_name": filename
+            "filename": filename
         }
         self.command["nexus_structure"] = {"children": [
             self._hdf_group(root, [("NX_class", "NXentry")])]}
@@ -58,7 +57,7 @@ class CommandBuilder(object):
 
     def set_param(self, filename=None, start_time_ms=None, stop_time_ms=None, root=None, broker=None, job_id=None):
         if filename:
-            self.command["file_name"] = filename
+            self.command["filename"] = filename
         if start_time_ms is not None:
             # passed in as unix time in ms
             self.command["start_time"] = int(start_time_ms)
@@ -103,7 +102,20 @@ class CommandBuilder(object):
             return None
 
     def get_command(self):
-        return self.command
+
+        tags = ['job_id', 'start_time', 'stop_time', 'broker', 'filename', 'service_id']
+        cmd = {}
+        for tag in tags:
+            try:
+                cmd[tag] = self.command[tag]
+            except KeyError:
+                pass
+        try:
+            cmd['nexus_structure'] = json.dumps(self.command['nexus_structure'])
+        except KeyError:
+            pass
+        
+        return cmd
 
     def get_start_time(self):
         # epoch time in msec

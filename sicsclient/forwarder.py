@@ -8,7 +8,6 @@ import json
 import kafka
 import zmq
 import time
-import logging
 from datetime import datetime
 
 from sicsclient.helpers import unix_time_milliseconds

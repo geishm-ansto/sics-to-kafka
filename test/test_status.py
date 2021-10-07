@@ -24,17 +24,18 @@ def my_json_loads(value):
 def return_empty():
     obj = create_x5f2_status({'job_id': ''})
     msg = SimpleNamespace(value=obj)
-    return msg
+    return {1: [msg]}
 
 
 def return_busy():
     obj = create_x5f2_status({'job_id': 'abcd'})
     msg = SimpleNamespace(value=obj)
-    return msg
+    return {1: [msg]}
 
 
 class MyConsumer(Mock):
     invoked = 0
+    blocked = False
 
     def __iter__(self):
         self._mock = Mock()
@@ -42,12 +43,19 @@ class MyConsumer(Mock):
         return self
 
     def __next__(self):
-        time.sleep(1)
         self.invoked += 1
         if self.invoked < 5:
             return return_busy()
         else:
             return return_empty()
+
+    def poll(self, timeout_ms=0):
+        if self.blocked:
+            time.sleep(timeout_ms / 1000.)
+            return None
+        else:
+            time.sleep(1)
+            return self.__next__()
 
 
 class TestWriterStats(unittest.TestCase):
@@ -70,9 +78,10 @@ class TestWriterStats(unittest.TestCase):
 
     @patch('sicsclient.writerstatus.KafkaConsumer', MyConsumer)
     def test_regular_request(self):
+
         writer = WriterStatus(c_mybroker, c_mytopic)
         time.sleep(5.5)
-        self.assertEqual(writer.consumer.invoked, 5)
+        self.assertGreaterEqual(writer.consumer.invoked, 5)
         job = writer.get_active_job()
         self.assertEqual(job, "")
         ok = writer.wait_for_idle(5)

@@ -166,7 +166,7 @@ class StateProcessor(object):
             if fnames:
                 basename = os.path.basename(fnames[0].value)
                 ss = basename.split('.')
-                file_name = ss[0] + '.nxs'
+                filename = ss[0] + '.nxs'
             else:
                 logger.error('Need file name to complete write request')
                 return
@@ -177,7 +177,7 @@ class StateProcessor(object):
             self._job_id = str(uuid.uuid4())
             cmd_builder = CommandBuilder(self._basefile)
             cmd_builder.set_param(
-                filename=file_name, start_time_ms=start_time_ms,
+                filename=filename, start_time_ms=start_time_ms,
                 stop_time_ms=0, job_id=self._job_id)
 
             # add the mutable nodes from the xml description
@@ -228,7 +228,7 @@ class StateProcessor(object):
             # the write is confirmed. Just delete until more is needed.
             self.send_start_cmd(timestamp_to_msecs(
                 scan_ts_secs), write_command)
-            logger.info(f'Start nexus writer, file: {file_name} job id: {self._job_id}')
+            logger.info(f'Start nexus writer, file: {filename} job id: {self._job_id}')
 
         except Exception as e:
             logger.error(str(e))

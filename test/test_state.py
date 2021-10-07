@@ -19,11 +19,12 @@ import zmq
 import json
 import copy
 
-from unittest.mock import patch, Mock
+from unittest.mock import patch
 from sicsclient.state import StateProcessor, find_nodes
 from sicsclient.parsexml import Component
 from sicsclient.kafkahelp import (timestamp_to_msecs, extract_runstart_data,
-                                  extract_runstop_data)
+                                  extract_runstop_data, create_runstart_message,
+                                  create_runend_message)
 
 c_base_file = './config/pln_base.json'
 c_ofile = './some_scan.hdf'
@@ -131,13 +132,45 @@ class TestStateProcessor(unittest.TestCase):
     - build the command argument 
     '''
 
+    def test_confirm_startmsg(self):
+        cmds = {
+            "job_id": "some_key",
+            "filename": "test_file.nxs",
+            "start_time": 567890,
+            "stop_time": 578214,
+            "run_name": "test_run",
+            "nexus_structure": "{}",
+            "service_id": "filewriter1",
+            "instrument_name": "LOKI",
+            "broker": "localhost:9092",
+            "metadata": "{3:1}",
+            "detector_spectrum_map": None,
+            "control_topic": "some_topic_name",
+        }
+        msg = create_runstart_message(cmds)
+        data = extract_runstart_data(msg)
+        for k, v in cmds.items():
+            dv = getattr(data, k)
+            self.assertEqual(dv, v)
+
+    def test_confirm_stopmsg(self):
+        cmds = {
+            "job_id": "some_key",
+            "stop_time": 578214,
+        }
+        msg = create_runend_message(**cmds)
+        data = extract_runstop_data(msg)
+        for k, v in cmds.items():
+            dv = getattr(data, k)
+            self.assertEqual(dv, v)
+
     def confirm_stop_sent(self, _kprod, job_id):
         _kprod.send.assert_called()
         args, kwargs = _kprod.send.call_args
         self.assertEqual(args[0], 'TEST_writerCommand')
         resp = extract_runstop_data(kwargs['value'])
-        self.assertGreater(resp['stop_time'], 0)
-        self.assertEqual(resp['job_id'], job_id)
+        self.assertGreater(resp.stop_time, 0)
+        self.assertEqual(resp.job_id, job_id)
 
     @patch('sicsclient.state.logger')
     @patch('sicsclient.state.zmq')
@@ -293,13 +326,13 @@ class TestStateProcessor(unittest.TestCase):
         self.assertEqual(kwargs['timestamp_ms'],
                          timestamp_to_msecs(start_time))
         resp = extract_runstart_data(kwargs['value'])
-        self.assertEqual(resp['start_time'], timestamp_to_msecs(start_time))
-        self.assertEqual(resp['stop_time'], 0)
+        self.assertEqual(resp.start_time, timestamp_to_msecs(start_time))
+        self.assertEqual(resp.stop_time, 0)
         basename = os.path.basename(c_ofile)
         ss = basename.split('.')
         file_name = ss[0] + '.nxs'
-        self.assertEqual(resp['file_name'].decode('utf-8'), file_name)
-        job_id = resp['job_id']
+        self.assertEqual(resp.filename, file_name)
+        job_id = resp.job_id
 
         # now send a stop command
         _kprod.reset_mock()
@@ -314,9 +347,9 @@ class TestStateProcessor(unittest.TestCase):
         self.assertEqual(kwargs['timestamp_ms'],
                          timestamp_to_msecs(start_time + 10))
         resp = extract_runstop_data(kwargs['value'])
-        self.assertEqual(resp['stop_time'],
+        self.assertEqual(resp.stop_time,
                          timestamp_to_msecs(start_time + 10))
-        self.assertEqual(resp['job_id'], job_id)
+        self.assertEqual(resp.job_id, job_id)
 
     @patch('test_state.StateProcessor.get_xml_parameters', my_get_xml)
     @patch('sicsclient.state.logger')
@@ -332,7 +365,7 @@ class TestStateProcessor(unittest.TestCase):
         def get_job_id(_kprod):
             args, kwargs = _kprod.send.call_args
             resp = extract_runstart_data(kwargs['value'])
-            return copy.copy(resp['job_id'])
+            return copy.copy(resp.job_id)
 
         with ZmqRouter(c_sics_port) as router:
             _response.return_value = {

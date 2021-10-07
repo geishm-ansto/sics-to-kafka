@@ -3,7 +3,6 @@
   messages to kafka sics-stream and the {State, Status} messages to 
   the StateProcessor.
 """
-from logging import Logger
 import os
 import sys
 import argparse

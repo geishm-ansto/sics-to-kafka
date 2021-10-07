@@ -1,12 +1,10 @@
 {
-    "cmd": "FileWriter_new",
     "broker": "localhost:9092",
     "job_id": "JOBID",
     "service_id": "ansto_filewriter",
-    "use_hdf_swmr": false,
     "start_time": "STARTTIME",
     "stop_time": "STOPTIME",
-    "file_name": "OFILE",
+    "filename": "OFILE",
     "nexus_structure": {
         "children": [
             {

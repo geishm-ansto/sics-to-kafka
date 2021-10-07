@@ -12,7 +12,6 @@ import unittest
 import threading
 
 from sicsclient.forwarder import Forwarder
-from sicsclient.forwarder import Forwarder
 from sicsclient.state import StateProcessor
 from sicsclient.writerstatus import WriterStatus
 
