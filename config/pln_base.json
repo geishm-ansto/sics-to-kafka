@@ -62,10 +62,11 @@
                                     {
                                         "type": "stream",
                                         "stream": {
-                                            "dtype": "string",
+                                            "dtype": "uint8",
                                             "topic": "sics-stream",
                                             "source": "state",
-                                            "writer_module": "s142"
+                                            "writer_module": "s142",
+                                            "array_size": 1
                                         }
                                     }
                                 ]                 
@@ -77,10 +78,11 @@
                                     {
                                         "type": "stream",
                                         "stream": {
-                                            "dtype": "string",
+                                            "dtype": "uint8",
                                             "topic": "sics-stream",
                                             "source": "status",
-                                            "writer_module": "s142"
+                                            "writer_module": "s142",
+                                            "array_size": 1
                                         }
                                     }
                                 ]                    
@@ -94,7 +96,7 @@
                                         "stream": {
                                             "topic": "neutron_events",
                                             "source": "Ansto",
-                                            "writer_module": "ev42"
+                                            "writer_module": "ev43"
                                         }
                                     }
                                 ]

@@ -80,6 +80,10 @@ class Forwarder:
                 kafka_logger.publish_f142_message(
                     self._sics_topic, event_ts, tag, value)
 
+            except (KeyError, AttributeError):
+                logger.error('SICS message has missing elements')
+                continue
+
             except kafka.errors.KafkaError:
                 kafka_logger = KafkaLogger(self._kafka_broker)
                 time.sleep(1)

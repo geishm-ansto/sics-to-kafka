@@ -167,9 +167,13 @@ class CommandBuilder(object):
                 }
             ]
         }
+        if dtype == 'uint8':
+            el["children"][0]["stream"]["array_size"] = 1
         if values is not None:
-            _, target = self._map_values(values)
+            array_size, target = self._map_values(values, isstream=True)
             el["children"][0]["stream"]["initial_value"] = target
+            if array_size:
+                el["children"][0]["stream"]["array_size"] = array_size
 
         if attributes:
             el['attributes'] = [{'name': k, 'values': v}
@@ -191,7 +195,7 @@ class CommandBuilder(object):
         if self.name_stream:
             el["name"] = name   # debugging
         if values is not None:
-            _, target = self._map_values(values)
+            _, target = self._map_values(values, isstream=True)
             el["stream"]["initial_value"] = target
         if attributes:
             addnl_attr = []
@@ -219,12 +223,15 @@ class CommandBuilder(object):
                 break
         return shape
 
-    def _map_values(self, values):
+    def _map_values(self, values, isstream):
         # need to handle single values or nested lists or numpy arrays
         # start with numpy objects
         size = None
         target = None
-        if isinstance(values, np.ndarray):
+        if isstream and isinstance(values, str):
+            target = list(values.encode('utf-8'))
+            size = len(target)
+        elif isinstance(values, np.ndarray):
             size = list(values.shape)
             target = values.tolist()
         elif isinstance(values, list):
@@ -245,7 +252,7 @@ class CommandBuilder(object):
             }
         }
 
-        size, target = self._map_values(values)
+        size, target = self._map_values(values, isstream=False)
         if size:
             el["dataset"]["size"] = size
         el["values"] = target

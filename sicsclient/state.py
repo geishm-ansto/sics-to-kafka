@@ -15,9 +15,9 @@ from datetime import datetime
 from queue import Queue, Empty
 from sicsclient.parsexml import parsesics, Component
 from sicsclient.cmdbuilder import CommandBuilder
-from sicsclient.kafkahelp import (KafkaProducer, timestamp_to_msecs,
+from sicsclient.kafkahelp import (KafkaProducer, timestamp_to_msecs, timestamp_to_nsecs,
                                   create_runstart_message, create_runend_message,
-                                  publish_message)
+                                  publish_message, publish_f142_message)
 from sicsclient.helpers import setup_module_logger
 
 logger = setup_module_logger("sk.state")
@@ -57,6 +57,7 @@ class StateProcessor(object):
         self._timeout_secs = timeout_secs
         self._ident = ident
         self._job_id = None
+        self._start_dataset_ts_sec = None
 
         # create the thread that will rebuild the units
         self._zcontext = self._zpoller = self._zsock = None
@@ -102,7 +103,7 @@ class StateProcessor(object):
     def add_hdf_component(self, cmd_builder, cmp, stream_source=None):
         '''
         Add each component to the command builderProcess each component where:
-        . 'f142' type {txt,int,flt}, mutable
+        . 'f142' type {byte,int,flt}, mutable
         . 'dataset' type {txt,int,flt}, not mutable
 
         The f142 writer does not support string streams so 'text' is captured as 
@@ -112,20 +113,28 @@ class StateProcessor(object):
         . 'text': 'string'
         . 'int': 'int64'
         '''
-        nxmap = {'text': 'string',
-                 'int': 'int64'}
-        try:
-            dtype_ = nxmap[cmp.dtype]
-        except KeyError:
-            dtype_ = cmp.dtype
+        s142map = {'text': 'uint8',
+                   'int': 'int64'}
+        dsetmap = {'text': 'string',
+                   'int': 'int64'}
+
+        def map_type(xmap, dtype):
+            try:
+                dtype_ = xmap[dtype]
+            except KeyError:
+                dtype_ = dtype
+            return dtype_
+
         if cmp.mutable:
             atts = [('units', cmp.units)] if cmp.units else []
             source = stream_source if stream_source else cmp.tag
             # uses the simple stream 's142' rather than 'f142' which includes alarm
             # status information from nicos or epics
+            dtype_ = map_type(s142map, cmp.dtype)
             cmd_builder.add_stream(
                 cmp.tag, self._stream_topic, source, 's142', dtype_, cmp.value, atts)
         else:
+            dtype_ = map_type(dsetmap, cmp.dtype)
             atts = [('units', cmp.units)] if cmp.units else []
             cmd_builder.add_dataset(cmp.tag, cmp.value, dtype_, atts)
 
@@ -192,6 +201,7 @@ class StateProcessor(object):
             # /entry/program_name             | NA
             # /entry/program_revision         | NA
             # /entry/data ... folder /w links | build explicitly
+            # /entry/scan_dataset             | stream : int
             iso_start = datetime.fromtimestamp(
                 start_time).isoformat(' ', 'seconds')
             addnl_cmps = [
@@ -202,9 +212,11 @@ class StateProcessor(object):
                 (Component("start_time", iso_start,
                  'text', '', False, '', '', True), None),
                 (Component("run_mode", None, 'text', '',
-                 True, '', '', True), "entry/run_mode"),
+                 True, '', '', True), "run_mode"),
                 (Component("time_stamp", None, 'int', '',
-                 True, '', '', True), "entry/time_stamp")
+                 True, '', '', True), "time_stamp"),
+                (Component("scan_dataset", None, 'int', '',
+                 True, '', '', True), "scan_dataset")
             ]
             for cmp, src in addnl_cmps:
                 self.add_hdf_component(cmd_builder, cmp, src)
@@ -228,7 +240,8 @@ class StateProcessor(object):
             # the write is confirmed. Just delete until more is needed.
             self.send_start_cmd(timestamp_to_msecs(
                 scan_ts_secs), write_command)
-            logger.info(f'Start nexus writer, file: {filename} job id: {self._job_id}')
+            logger.info(
+                f'{scan_ts_secs:.4f}: Start nexus writer, file: {filename} job id: {self._job_id}')
 
         except Exception as e:
             logger.error(str(e))
@@ -241,7 +254,7 @@ class StateProcessor(object):
         if self._job_id:
             self.send_stop_cmd(timestamp_to_msecs(
                 finish_ts_secs), self._job_id)
-            logger.info('Stop nexus writer, job id: {}'.format(self._job_id))
+            logger.info('{:.4f}: Stop nexus writer, job id: {}'.format(finish_ts_secs, self._job_id))
             self._job_id = None
         else:
             logger.warning('Missing job id, may have timed out, do nothing!')
@@ -273,6 +286,19 @@ class StateProcessor(object):
         msg = create_runend_message(timestamp_ms, job_id)
         publish_message(self._kafka_producer,
                         self._writer_topic, timestamp_ms, msg)
+
+    def start_dataset_scan(self, timestamp_sec):
+        self._start_dataset_ts_sec = timestamp_sec
+
+    def end_dataset_scan(self, timestamp_sec):
+        if self._start_dataset_ts_sec and timestamp_sec >= self._start_dataset_ts_sec:
+            delta_ns = int(timestamp_to_nsecs(
+                timestamp_sec - self._start_dataset_ts_sec))
+            publish_f142_message(
+                self._kafka_producer, self._stream_topic, timestamp_sec, 'scan_dataset', delta_ns)
+        else:
+            logger.warning('Missing or invalid dataset start scan event')
+        self._start_dataset_ts_sec = None
 
     def cmd_request(self, cmd, text):
 
@@ -321,6 +347,20 @@ class StateProcessor(object):
         '''
         self.open_connection()
 
+        map_function = {
+            ('state','started','hmscan') : self.start_scan,
+            ('state','finish','hmscan') : self.end_scan,
+            ('state','started','histogrammemory') : self.start_dataset_scan,
+            ('state','finish','histogrammemory') : self.end_dataset_scan,
+        }
+        def call_handler(r):
+            tag = (r["type"].lower(), r["name"].lower(), r["value"].lower())
+            try:
+                map_function[tag](r["ts"])
+                return True
+            except KeyError:
+                return False
+
         while True:
             try:
                 # get the message from the queue - if it times out after N sec
@@ -332,10 +372,8 @@ class StateProcessor(object):
                 # do something useful
                 logger.info('{:.3f} {} {}'.format(
                     resp["ts"], resp["name"], resp["value"]))
-                if resp["type"] == "State" and resp["name"] == "STARTED" and resp["value"] == "hmscan":
-                    self.start_scan(resp["ts"])
-                elif resp["type"] == "State" and resp["name"] == "FINISH" and resp["value"] == "hmscan":
-                    self.end_scan(resp["ts"])
+                if call_handler(resp):
+                    pass
                 elif resp["type"] == "Status" and resp["name"] == "Status" and \
                         ('UNDEFINED' in resp['value'] or "Eager to execute" in resp["value"]):
                     self.handle_idle_event()

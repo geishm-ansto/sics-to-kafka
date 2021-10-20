@@ -19,7 +19,29 @@ def timestamp_to_nsecs(ts):
 def timestamp_to_msecs(ts):
     return int(ts * 1e3)
 
+def create_f142_message(timestamp, tag, value):
 
+    timestamp_ns = timestamp_to_nsecs(timestamp)
+    if type(value) == str:
+        # overrride the current implementation as it appears wrong, 
+        # it converts a ubyte array to a ushort array
+        bvalue = np.array(list(value.encode('utf-8')), dtype=np.ubyte)
+        builder, source = _setup_builder(tag)
+        _serialise_ubytearray(builder, bvalue, source)
+        buff = _complete_buffer(builder, timestamp_ns, )
+
+    else:
+        buff = serialise_f142(value, tag, timestamp_ns)
+    return buff
+
+def publish_f142_message(producer, topic, timestamp_sec, tag, value):
+    """
+    Create, publish and flush an f142 message to a given topic.
+    """
+    msg = create_f142_message(timestamp_sec, tag, value)
+    producer.send(
+        topic, msg, timestamp_ms=timestamp_to_msecs(timestamp_sec))
+    producer.flush()
 class KafkaLogger(object):
 
     def __init__(self, broker):
@@ -29,31 +51,8 @@ class KafkaLogger(object):
             raise ValueError(
                 'Failed to create kafka producer: {}'.format(broker))
 
-    def create_f142_message(self, timestamp, tag, value):
-
-        timestamp_ns = timestamp_to_nsecs(timestamp)
-        if type(value) == str:
-            # overrride the current implementation as it appears wrong, 
-            # it converts a ubyte array to a ushort array
-            bvalue = np.array(list(value.encode('utf-8')), dtype=np.ubyte)
-            builder, source = _setup_builder(tag)
-            _serialise_ubytearray(builder, bvalue, source)
-            buff = _complete_buffer(builder, timestamp_ns, )
-
-        else:
-            buff = serialise_f142(value, tag, timestamp_ns)
-        return buff
-
     def publish_f142_message(self, topic, timestamp, tag, value):
-        """
-        Publish an f142 message to a given topic.
-        """
-        msg = self.create_f142_message(timestamp, tag, value)
-        if msg:
-            # send and flush so that messages are not batched
-            self.producer.send(
-                topic, msg, timestamp_ms=timestamp_to_msecs(timestamp))
-            self.producer.flush()
+        publish_f142_message(self.producer, topic, timestamp, tag, value)
 
 
 def create_runstart_message(cmdargs):
